@@ -8,12 +8,6 @@ const tools = [
     description: 'Custom inch to millimeter converter for the A5 bridge saw, including X/Y offsets, size conversion, inch/mm conversion, and sixteenths helper.',
   },
   {
-    name: 'Direct Video Downloader',
-    status: 'Active',
-    href: '/tools/direct-video-downloader',
-    description: 'Open, copy, or download direct video file links such as .mp4, .mov, .webm, .m4v, .avi, and .mkv files.',
-  },
-  {
     name: 'Converters',
     status: 'Planned',
     href: null,
