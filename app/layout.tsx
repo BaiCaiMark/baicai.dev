@@ -5,18 +5,21 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://baicai.dev'),
-  title: 'baicai.dev',
+  title: 'BaiCai',
   description: 'Learning in public and building iteratively.',
   openGraph: {
-    title: 'baicai.dev',
+    title: 'BaiCai',
     description: 'Learning in public and building iteratively.',
     url: 'https://baicai.dev',
-    siteName: 'baicai.dev',
-    images: [{ url: '/favicon.svg', width: 1200, height: 630, alt: 'baicai.dev' }],
+    siteName: 'BaiCai',
+    images: [{ url: '/favicon.svg', width: 96, height: 96, alt: 'BaiCai' }],
     locale: 'en_US',
     type: 'website',
   },
-  icons: { icon: '/favicon.svg' },
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    shortcut: ['/favicon.svg'],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
