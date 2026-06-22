@@ -31,7 +31,7 @@ export default function NavBar() {
       <div className="mx-auto max-w-5xl px-4">
         <nav className="flex min-h-14 flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
           <Link href="/" className="font-semibold text-gray-950 hover:text-gray-700">
-            baicai.dev
+            BaiCai
           </Link>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             {navItems.map((item) => (
