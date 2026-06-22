@@ -12,13 +12,13 @@ export const metadata: Metadata = {
     description: 'Learning in public and building iteratively.',
     url: 'https://baicai.dev',
     siteName: 'BaiCai',
-    images: [{ url: '/favicon.svg', width: 96, height: 96, alt: 'BaiCai' }],
+    images: [{ url: '/favicon.ico', width: 64, height: 64, alt: 'BaiCai' }],
     locale: 'en_US',
     type: 'website',
   },
   icons: {
-    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
-    shortcut: ['/favicon.svg'],
+    icon: [{ url: '/favicon.ico', type: 'image/x-icon' }],
+    shortcut: ['/favicon.ico'],
   },
 }
 
