@@ -29,9 +29,9 @@ function formatValue(value: number, decimals: number) {
 
 export default function A5BridgeSawPage() {
   const [values, setValues] = useState(initialValues)
-  const [inch, setInch] = useState('')
-  const [mm, setMm] = useState('')
-  const [fraction, setFraction] = useState('')
+  const [inch, setInch] = useState('0.0394')
+  const [mm, setMm] = useState('1')
+  const [fraction, setFraction] = useState('11')
 
   const outputs = useMemo(() => {
     const x = parseNumber(values.x)
