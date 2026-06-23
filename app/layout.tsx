@@ -3,7 +3,7 @@ import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 import type { Metadata } from 'next'
 
-const faviconPath = '/favicon.png?v=2'
+const faviconPath = '/favicon.svg?v=3'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://baicai.dev'),
@@ -14,14 +14,13 @@ export const metadata: Metadata = {
     description: 'Learning in public and building iteratively.',
     url: 'https://baicai.dev',
     siteName: 'BaiCai',
-    images: [{ url: faviconPath, width: 128, height: 128, alt: 'BaiCai' }],
+    images: [{ url: faviconPath, width: 1024, height: 1024, alt: 'BaiCai' }],
     locale: 'en_US',
     type: 'website',
   },
   icons: {
-    icon: [{ url: faviconPath, type: 'image/png', sizes: '128x128' }],
+    icon: [{ url: faviconPath, type: 'image/svg+xml', sizes: 'any' }],
     shortcut: [faviconPath],
-    apple: [{ url: faviconPath, type: 'image/png', sizes: '128x128' }],
   },
 }
 
