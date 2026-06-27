@@ -8,6 +8,12 @@ const tools = [
     description: 'Custom inch to millimeter converter for the A5 bridge saw, including X/Y offsets, size conversion, inch/mm conversion, and sixteenths helper.',
   },
   {
+    name: 'Scripture Helper',
+    status: 'Draft',
+    href: '/tools/scripture',
+    description: 'Import your own local scripture JSON, search passages by reference, copy formatted text, and build a weekly passage list.',
+  },
+  {
     name: 'Converters',
     status: 'Planned',
     href: null,
