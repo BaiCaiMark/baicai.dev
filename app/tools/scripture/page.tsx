@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 
 type Verse = {
@@ -19,9 +19,47 @@ type ParsedReference = {
 
 const bookAliases: Record<string, string> = {
   '\u7d04': '\u7d04\u7ff0\u798f\u97f3',
+  '\u7d04\u7ff0': '\u7d04\u7ff0\u798f\u97f3',
   '\u7d04\u7ff0\u798f\u97f3': '\u7d04\u7ff0\u798f\u97f3',
+  '\u7f85': '\u7f85\u99ac\u66f8',
+  '\u7f85\u99ac': '\u7f85\u99ac\u66f8',
+  '\u7f85\u99ac\u66f8': '\u7f85\u99ac\u66f8',
+  '\u8a69': '\u8a69\u7bc7',
+  '\u8a69\u7bc7': '\u8a69\u7bc7',
+  '\u8cfd': '\u4ee5\u8cfd\u4e9e\u66f8',
+  '\u4ee5\u8cfd\u4e9e': '\u4ee5\u8cfd\u4e9e\u66f8',
+  '\u4ee5\u8cfd\u4e9e\u66f8': '\u4ee5\u8cfd\u4e9e\u66f8',
+  '\u592a': '\u99ac\u592a\u798f\u97f3',
+  '\u99ac\u592a': '\u99ac\u592a\u798f\u97f3',
+  '\u99ac\u592a\u798f\u97f3': '\u99ac\u592a\u798f\u97f3',
+  '\u53ef': '\u99ac\u53ef\u798f\u97f3',
+  '\u99ac\u53ef': '\u99ac\u53ef\u798f\u97f3',
+  '\u99ac\u53ef\u798f\u97f3': '\u99ac\u53ef\u798f\u97f3',
+  '\u8def': '\u8def\u52a0\u798f\u97f3',
+  '\u8def\u52a0': '\u8def\u52a0\u798f\u97f3',
+  '\u8def\u52a0\u798f\u97f3': '\u8def\u52a0\u798f\u97f3',
+  '\u5f92': '\u4f7f\u5f92\u884c\u50b3',
+  '\u4f7f\u5f92': '\u4f7f\u5f92\u884c\u50b3',
+  '\u4f7f\u5f92\u884c\u50b3': '\u4f7f\u5f92\u884c\u50b3',
+  '\u6797\u524d': '\u54e5\u6797\u591a\u524d\u66f8',
+  '\u54e5\u524d': '\u54e5\u6797\u591a\u524d\u66f8',
+  '\u54e5\u6797\u591a\u524d\u66f8': '\u54e5\u6797\u591a\u524d\u66f8',
+  '\u6797\u5f8c': '\u54e5\u6797\u591a\u5f8c\u66f8',
+  '\u54e5\u5f8c': '\u54e5\u6797\u591a\u5f8c\u66f8',
+  '\u54e5\u6797\u591a\u5f8c\u66f8': '\u54e5\u6797\u591a\u5f8c\u66f8',
   John: '\u7d04\u7ff0\u798f\u97f3',
+  Romans: '\u7f85\u99ac\u66f8',
+  Psalms: '\u8a69\u7bc7',
+  Psalm: '\u8a69\u7bc7',
+  Isaiah: '\u4ee5\u8cfd\u4e9e\u66f8',
+  Matthew: '\u99ac\u592a\u798f\u97f3',
+  Mark: '\u99ac\u53ef\u798f\u97f3',
+  Luke: '\u8def\u52a0\u798f\u97f3',
+  Acts: '\u4f7f\u5f92\u884c\u50b3',
 }
+
+const scriptureStorageKey = 'baicai-scripture-helper-verses'
+const weeklyListStorageKey = 'baicai-scripture-helper-weekly-list'
 
 const referenceExamples = [
   '\u7d043:16',
@@ -111,12 +149,80 @@ function parseImportedData(value: unknown) {
     }))
 }
 
+function parseStoredWeeklyList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter((entry): entry is unknown[] => Array.isArray(entry))
+    .map((entry) => parseImportedData(entry))
+    .filter((entry) => entry.length > 0)
+}
+
 export default function ScriptureHelperPage() {
   const [verses, setVerses] = useState<Verse[]>([])
   const [query, setQuery] = useState('')
   const [weeklyList, setWeeklyList] = useState<Verse[][]>([])
   const [importStatus, setImportStatus] = useState('No scripture data imported yet.')
   const [copyStatus, setCopyStatus] = useState('')
+  const [storageReady, setStorageReady] = useState(false)
+  const [storageStatus, setStorageStatus] = useState('Checking browser storage...')
+
+  useEffect(() => {
+    try {
+      const savedVerses = window.localStorage.getItem(scriptureStorageKey)
+      const savedWeeklyList = window.localStorage.getItem(weeklyListStorageKey)
+
+      if (savedVerses) {
+        const restoredVerses = parseImportedData(JSON.parse(savedVerses))
+        setVerses(restoredVerses)
+        setImportStatus(`Restored ${restoredVerses.length} verses from this browser.`)
+      }
+
+      if (savedWeeklyList) {
+        setWeeklyList(parseStoredWeeklyList(JSON.parse(savedWeeklyList)))
+      }
+
+      setStorageStatus('Browser storage is available.')
+    } catch {
+      setStorageStatus('Browser storage is not available.')
+    } finally {
+      setStorageReady(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!storageReady) {
+      return
+    }
+
+    try {
+      if (verses.length > 0) {
+        window.localStorage.setItem(scriptureStorageKey, JSON.stringify(verses))
+      } else {
+        window.localStorage.removeItem(scriptureStorageKey)
+      }
+    } catch {
+      setStorageStatus('Could not save imported data in this browser.')
+    }
+  }, [storageReady, verses])
+
+  useEffect(() => {
+    if (!storageReady) {
+      return
+    }
+
+    try {
+      if (weeklyList.length > 0) {
+        window.localStorage.setItem(weeklyListStorageKey, JSON.stringify(weeklyList))
+      } else {
+        window.localStorage.removeItem(weeklyListStorageKey)
+      }
+    } catch {
+      setStorageStatus('Could not save weekly passages in this browser.')
+    }
+  }, [storageReady, weeklyList])
 
   const matches = useMemo(() => {
     const trimmedQuery = query.trim()
@@ -155,6 +261,7 @@ export default function ScriptureHelperPage() {
       const imported = parseImportedData(JSON.parse(text))
       setVerses(imported)
       setImportStatus(`Imported ${imported.length} verses from ${file.name}.`)
+      setStorageStatus(imported.length > 0 ? 'Imported data is saved in this browser.' : 'No data saved yet.')
     } catch {
       setImportStatus('Import failed. Please use valid JSON scripture data.')
     } finally {
@@ -182,7 +289,21 @@ export default function ScriptureHelperPage() {
     setCopyStatus('Current result added to weekly list.')
   }
 
+  function clearImportedData() {
+    setVerses([])
+    setQuery('')
+    setImportStatus('Imported scripture data cleared from this browser.')
+    setStorageStatus('No imported data saved in this browser.')
+
+    try {
+      window.localStorage.removeItem(scriptureStorageKey)
+    } catch {
+      setStorageStatus('Could not update browser storage.')
+    }
+  }
+
   const weeklyText = weeklyList.map((entry) => formatWithReference(entry)).join('\n\n')
+  const importedDataSaved = verses.length > 0 && storageStatus !== 'Browser storage is not available.'
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-12 sm:py-20">
@@ -203,6 +324,18 @@ export default function ScriptureHelperPage() {
             <p className="mt-3 text-sm leading-6 text-gray-600">
               Imported scripture data stays in this browser and is not uploaded.
             </p>
+            <div className="mt-5 grid gap-3 rounded-md border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Imported verses</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-950">{verses.length}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Browser save</p>
+                <p className="mt-2 text-sm font-medium text-gray-700">
+                  {importedDataSaved ? 'Saved in this browser' : 'No imported data saved'}
+                </p>
+              </div>
+            </div>
             <label className="mt-5 block">
               <span className="text-sm font-semibold text-gray-950">JSON file</span>
               <input
@@ -213,6 +346,14 @@ export default function ScriptureHelperPage() {
               />
             </label>
             <p className="mt-4 text-sm text-gray-600">{importStatus}</p>
+            <p className="mt-2 text-sm text-gray-600">{storageStatus}</p>
+            <button
+              type="button"
+              onClick={clearImportedData}
+              className="mt-4 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900"
+            >
+              Clear imported data
+            </button>
             <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Simple JSON format</p>
               <pre className="mt-3 overflow-x-auto text-xs leading-5 text-gray-700">
