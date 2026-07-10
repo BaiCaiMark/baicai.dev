@@ -1,21 +1,31 @@
+import type { Metadata } from 'next'
+import PageHeader from '../components/PageHeader'
+
+export const metadata: Metadata = {
+  title: 'Contact',
+  description: 'Contact Mark at BaiCai.',
+}
+
 export default function ContactPage() {
   return (
-    <section className="mx-auto max-w-3xl px-4 py-16 sm:py-24">
-      <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Contact</p>
-      <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-950">Get in touch.</h1>
-      <p className="mt-6 text-lg leading-8 text-gray-600">
-        The simplest way to reach me is by email. More links can be added here later
-        when the site grows.
-      </p>
+    <section className="page-section">
+      <div className="site-container">
+        <PageHeader
+          eyebrow="Contact"
+          title="Get in touch."
+          description="Email is the simplest way to reach me about the site, a tool, or a project."
+        />
 
-      <div className="mt-10 rounded-md border border-gray-200 p-6">
-        <p className="text-sm font-medium text-gray-500">Email</p>
-        <a
-          href="mailto:baicai.exe@gmail.com"
-          className="mt-2 inline-block text-lg font-semibold text-gray-950 hover:text-gray-700"
-        >
-          baicai.exe@gmail.com
-        </a>
+        <div className="content-card mt-12 max-w-2xl">
+          <p className="eyebrow">Email</p>
+          <a
+            href="mailto:baicai.exe@gmail.com"
+            className="mt-4 block text-xl font-semibold text-[var(--brand-strong)] sm:text-2xl"
+          >
+            baicai.exe@gmail.com
+          </a>
+          <p className="section-copy mt-4">Messages can be written in English or Chinese.</p>
+        </div>
       </div>
     </section>
   )

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
+import PageHeader from '../../components/PageHeader'
 
 type Verse = {
   book: string
@@ -166,63 +167,32 @@ export default function ScriptureHelperPage() {
   const [weeklyList, setWeeklyList] = useState<Verse[][]>([])
   const [importStatus, setImportStatus] = useState('No scripture data imported yet.')
   const [copyStatus, setCopyStatus] = useState('')
-  const [storageReady, setStorageReady] = useState(false)
   const [storageStatus, setStorageStatus] = useState('Checking browser storage...')
 
   useEffect(() => {
-    try {
-      const savedVerses = window.localStorage.getItem(scriptureStorageKey)
-      const savedWeeklyList = window.localStorage.getItem(weeklyListStorageKey)
+    const restoreTimer = window.setTimeout(() => {
+      try {
+        const savedVerses = window.localStorage.getItem(scriptureStorageKey)
+        const savedWeeklyList = window.localStorage.getItem(weeklyListStorageKey)
 
-      if (savedVerses) {
-        const restoredVerses = parseImportedData(JSON.parse(savedVerses))
-        setVerses(restoredVerses)
-        setImportStatus(`Restored ${restoredVerses.length} verses from this browser.`)
+        if (savedVerses) {
+          const restoredVerses = parseImportedData(JSON.parse(savedVerses))
+          setVerses(restoredVerses)
+          setImportStatus(`Restored ${restoredVerses.length} verses from this browser.`)
+        }
+
+        if (savedWeeklyList) {
+          setWeeklyList(parseStoredWeeklyList(JSON.parse(savedWeeklyList)))
+        }
+
+        setStorageStatus('Browser storage is available.')
+      } catch {
+        setStorageStatus('Browser storage is not available.')
       }
+    }, 0)
 
-      if (savedWeeklyList) {
-        setWeeklyList(parseStoredWeeklyList(JSON.parse(savedWeeklyList)))
-      }
-
-      setStorageStatus('Browser storage is available.')
-    } catch {
-      setStorageStatus('Browser storage is not available.')
-    } finally {
-      setStorageReady(true)
-    }
+    return () => window.clearTimeout(restoreTimer)
   }, [])
-
-  useEffect(() => {
-    if (!storageReady) {
-      return
-    }
-
-    try {
-      if (verses.length > 0) {
-        window.localStorage.setItem(scriptureStorageKey, JSON.stringify(verses))
-      } else {
-        window.localStorage.removeItem(scriptureStorageKey)
-      }
-    } catch {
-      setStorageStatus('Could not save imported data in this browser.')
-    }
-  }, [storageReady, verses])
-
-  useEffect(() => {
-    if (!storageReady) {
-      return
-    }
-
-    try {
-      if (weeklyList.length > 0) {
-        window.localStorage.setItem(weeklyListStorageKey, JSON.stringify(weeklyList))
-      } else {
-        window.localStorage.removeItem(weeklyListStorageKey)
-      }
-    } catch {
-      setStorageStatus('Could not save weekly passages in this browser.')
-    }
-  }, [storageReady, weeklyList])
 
   const matches = useMemo(() => {
     const trimmedQuery = query.trim()
@@ -261,7 +231,18 @@ export default function ScriptureHelperPage() {
       const imported = parseImportedData(JSON.parse(text))
       setVerses(imported)
       setImportStatus(`Imported ${imported.length} verses from ${file.name}.`)
-      setStorageStatus(imported.length > 0 ? 'Imported data is saved in this browser.' : 'No data saved yet.')
+
+      try {
+        if (imported.length > 0) {
+          window.localStorage.setItem(scriptureStorageKey, JSON.stringify(imported))
+          setStorageStatus('Imported data is saved in this browser.')
+        } else {
+          window.localStorage.removeItem(scriptureStorageKey)
+          setStorageStatus('No data saved yet.')
+        }
+      } catch {
+        setStorageStatus('Could not save imported data in this browser.')
+      }
     } catch {
       setImportStatus('Import failed. Please use valid JSON scripture data.')
     } finally {
@@ -275,8 +256,12 @@ export default function ScriptureHelperPage() {
       return
     }
 
-    await navigator.clipboard.writeText(text)
-    setCopyStatus(`${label} copied.`)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyStatus(`${label} copied.`)
+    } catch {
+      setCopyStatus('Copy failed. Please select and copy the text manually.')
+    }
   }
 
   function addCurrentResult() {
@@ -285,8 +270,26 @@ export default function ScriptureHelperPage() {
       return
     }
 
-    setWeeklyList((current) => [...current, matches])
+    const nextWeeklyList = [...weeklyList, matches]
+    setWeeklyList(nextWeeklyList)
     setCopyStatus('Current result added to weekly list.')
+
+    try {
+      window.localStorage.setItem(weeklyListStorageKey, JSON.stringify(nextWeeklyList))
+    } catch {
+      setStorageStatus('Could not save weekly passages in this browser.')
+    }
+  }
+
+  function clearWeeklyList() {
+    setWeeklyList([])
+    setCopyStatus('Weekly passage list cleared.')
+
+    try {
+      window.localStorage.removeItem(weeklyListStorageKey)
+    } catch {
+      setStorageStatus('Could not update browser storage.')
+    }
   }
 
   function clearImportedData() {
@@ -306,57 +309,58 @@ export default function ScriptureHelperPage() {
   const importedDataSaved = verses.length > 0 && storageStatus !== 'Browser storage is not available.'
 
   return (
-    <section className="mx-auto max-w-5xl px-4 py-12 sm:py-20">
-      <div className="max-w-3xl">
-        <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Tools / Scripture Helper</p>
-        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-950">Scripture Helper.</h1>
-        <p className="mt-5 text-lg leading-8 text-gray-600">
-          Import your own local scripture JSON, search by reference, copy formatted passages, and
-          collect a weekly passage list.
-        </p>
-      </div>
+    <section className="page-section">
+      <div className="site-container">
+      <PageHeader
+        eyebrow="Tools / Scripture Helper"
+        title="Scripture Helper."
+        description="Import your own local scripture JSON, search by reference, copy formatted passages, and collect a weekly passage list."
+      />
 
-      <div className="mt-10 rounded-md border border-gray-200 bg-gray-50 p-4 sm:p-6">
-        <div className="grid gap-6 lg:grid-cols-[1fr_1.15fr]">
-          <div className="rounded-md border border-gray-200 bg-white p-5">
-            <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Local import</p>
-            <h2 className="mt-2 text-2xl font-semibold text-gray-950">Scripture data</h2>
-            <p className="mt-3 text-sm leading-6 text-gray-600">
+      <div className="mt-10 border-y border-[var(--border)] bg-[var(--surface-muted)] py-6 sm:px-6">
+        <div className="grid gap-5 xl:grid-cols-[1fr_1.15fr]">
+          <div className="bg-white p-5 sm:p-6">
+            <p className="eyebrow">Local import</p>
+            <h2 className="section-heading mt-2">Scripture data</h2>
+            <p className="section-copy mt-3">
               Imported scripture data stays in this browser and is not uploaded.
             </p>
-            <div className="mt-5 grid gap-3 rounded-md border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Imported verses</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-950">{verses.length}</p>
+                <p className="text-xs font-semibold uppercase text-[var(--muted)]">Imported verses</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--foreground)]">{verses.length}</p>
               </div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Browser save</p>
-                <p className="mt-2 text-sm font-medium text-gray-700">
+                <p className="text-xs font-semibold uppercase text-[var(--muted)]">Browser save</p>
+                <p className="mt-2 text-sm font-medium text-[var(--foreground)]">
                   {importedDataSaved ? 'Saved in this browser' : 'No imported data saved'}
                 </p>
               </div>
             </div>
             <label className="mt-5 block">
-              <span className="text-sm font-semibold text-gray-950">JSON file</span>
+              <span className="text-sm font-semibold text-[var(--foreground)]">JSON file</span>
               <input
                 type="file"
                 accept="application/json,.json"
                 onChange={importJson}
-                className="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-3 text-sm text-gray-700 outline-none transition file:mr-4 file:rounded-md file:border-0 file:bg-gray-950 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white focus:border-gray-950"
+                className="field-input mt-2 h-auto text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[var(--brand-strong)] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
               />
             </label>
-            <p className="mt-4 text-sm text-gray-600">{importStatus}</p>
-            <p className="mt-2 text-sm text-gray-600">{storageStatus}</p>
+            <div className="mt-4 text-sm leading-6 text-[var(--muted)]" aria-live="polite">
+              <p>{importStatus}</p>
+              <p className="mt-1">{storageStatus}</p>
+            </div>
             <button
               type="button"
               onClick={clearImportedData}
-              className="mt-4 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900"
+              disabled={verses.length === 0}
+              className="button-secondary mt-4 w-full sm:w-auto"
             >
               Clear imported data
             </button>
-            <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Simple JSON format</p>
-              <pre className="mt-3 overflow-x-auto text-xs leading-5 text-gray-700">
+            <div className="mt-5 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+              <p className="text-xs font-semibold uppercase text-[var(--muted)]">Simple JSON format</p>
+              <pre className="mt-3 overflow-x-auto font-mono text-xs leading-5 text-[var(--foreground)]">
 {`[
   {
     "book": "${referenceExamples[0].slice(0, 1)}",
@@ -369,43 +373,46 @@ export default function ScriptureHelperPage() {
             </div>
           </div>
 
-          <div className="rounded-md border border-gray-200 bg-white p-5">
-            <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Search</p>
-            <h2 className="mt-2 text-2xl font-semibold text-gray-950">Find passages</h2>
+          <div className="bg-white p-5 sm:p-6">
+            <p className="eyebrow">Search</p>
+            <h2 className="section-heading mt-2">Find passages</h2>
             <label className="mt-5 block">
-              <span className="text-sm font-semibold text-gray-950">Reference or keyword</span>
+              <span className="text-sm font-semibold text-[var(--foreground)]">Reference or keyword</span>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={referenceExamples[0]}
-                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-3 text-lg font-semibold text-gray-950 outline-none transition focus:border-gray-950"
+                className="field-input mt-2 text-lg font-semibold"
               />
             </label>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+            <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
               {referenceExamples.map((example) => (
                 <span key={example}>{example}</span>
               ))}
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={() => copyText(formatWithReference(matches), 'Reference format')}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900"
+                disabled={matches.length === 0}
+                className="button-secondary"
               >
                 Copy with reference
               </button>
               <button
                 type="button"
                 onClick={() => copyText(formatVerseTextOnly(matches), 'Verse text')}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900"
+                disabled={matches.length === 0}
+                className="button-secondary"
               >
                 Copy verse text only
               </button>
               <button
                 type="button"
                 onClick={() => copyText(formatPpt(matches), 'PPT format')}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900"
+                disabled={matches.length === 0}
+                className="button-secondary sm:col-span-2"
               >
                 Copy PPT format
               </button>
@@ -414,17 +421,18 @@ export default function ScriptureHelperPage() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-md border border-gray-200 p-5 sm:p-6">
+      <div className="mt-10 grid gap-10 border-t border-[var(--border)] pt-8 xl:grid-cols-[1.15fr_0.85fr] xl:gap-0">
+        <div className="xl:border-r xl:border-[var(--border)] xl:pr-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Results</p>
-              <h2 className="mt-2 text-2xl font-semibold text-gray-950">Matched verses</h2>
+              <p className="eyebrow">Results</p>
+              <h2 className="section-heading mt-2">Matched verses</h2>
             </div>
             <button
               type="button"
               onClick={addCurrentResult}
-              className="w-fit rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900"
+              disabled={matches.length === 0}
+              className="button-secondary w-full sm:w-auto"
             >
               Add current result to list
             </button>
@@ -435,15 +443,15 @@ export default function ScriptureHelperPage() {
               matches.map((verse) => (
                 <article
                   key={`${verse.book}-${verse.chapter}-${verse.verse}`}
-                  className="rounded-md border border-gray-200 bg-gray-50 p-4"
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4"
                 >
-                  <p className="text-sm font-semibold text-gray-950">{formatReference(verse)}</p>
-                  <p className="mt-2 text-base leading-7 text-gray-700">{verse.text}</p>
+                  <p className="text-sm font-semibold text-[var(--brand-strong)]">{formatReference(verse)}</p>
+                  <p className="mt-2 text-base leading-7 text-[var(--foreground)]">{verse.text}</p>
                 </article>
               ))
             ) : (
-              <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm leading-6 text-gray-600">
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                <p className="section-copy">
                   Import JSON data and search a reference to show matching verses.
                 </p>
               </div>
@@ -451,21 +459,23 @@ export default function ScriptureHelperPage() {
           </div>
         </div>
 
-        <div className="rounded-md border border-gray-200 p-5 sm:p-6">
-          <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Weekly passage list</p>
-          <h2 className="mt-2 text-2xl font-semibold text-gray-950">Passages</h2>
-          <div className="mt-5 flex flex-wrap gap-3">
+        <div className="xl:pl-8">
+          <p className="eyebrow">Weekly passage list</p>
+          <h2 className="section-heading mt-2">Passages</h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => copyText(weeklyText, 'All passages')}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900"
+              disabled={weeklyList.length === 0}
+              className="button-secondary"
             >
               Copy all passages
             </button>
             <button
               type="button"
-              onClick={() => setWeeklyList([])}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900"
+              onClick={clearWeeklyList}
+              disabled={weeklyList.length === 0}
+              className="button-secondary"
             >
               Clear list
             </button>
@@ -476,23 +486,24 @@ export default function ScriptureHelperPage() {
               weeklyList.map((entry, index) => (
                 <div
                   key={`${entry[0]?.book}-${entry[0]?.chapter}-${entry[0]?.verse}-${index}`}
-                  className="rounded-md border border-gray-200 bg-gray-50 p-4"
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4"
                 >
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Passage {index + 1}</p>
-                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">
+                  <p className="text-xs font-semibold uppercase text-[var(--muted)]">Passage {index + 1}</p>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[var(--foreground)]">
                     {formatWithReference(entry)}
                   </p>
                 </div>
               ))
             ) : (
-              <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm leading-6 text-gray-600">No passages added yet.</p>
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                <p className="section-copy">No passages added yet.</p>
               </div>
             )}
           </div>
 
-          {copyStatus ? <p className="mt-4 text-sm text-gray-600">{copyStatus}</p> : null}
+          {copyStatus ? <p className="mt-4 text-sm text-[var(--muted)]" aria-live="polite">{copyStatus}</p> : null}
         </div>
+      </div>
       </div>
     </section>
   )

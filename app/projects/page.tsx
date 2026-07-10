@@ -1,37 +1,50 @@
+import type { Metadata } from 'next'
+import PageHeader from '../components/PageHeader'
+
+export const metadata: Metadata = {
+  title: 'Projects',
+  description: 'Current projects and ongoing work from BaiCai.',
+}
+
 const projects = [
   {
     name: 'baicai.dev',
-    status: 'In progress',
-    description: 'A clean personal site rebuilt from a simple Next.js foundation.',
+    status: 'Active',
+    description: 'The personal site itself: a dependable home for tools, projects, notes, and contact information.',
+    detail: 'Next.js / Vercel',
   },
   {
-    name: 'Next project',
-    status: 'Planning',
-    description: 'A place reserved for the next useful tool, experiment, or public build.',
+    name: 'Everyday tools',
+    status: 'In progress',
+    description: 'A growing set of focused browser tools, beginning with the A5 converter and Scripture Helper.',
+    detail: 'Client-side utilities',
   },
 ]
 
 export default function ProjectsPage() {
   return (
-    <section className="mx-auto max-w-5xl px-4 py-16 sm:py-24">
-      <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Projects</p>
-      <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-950">Things I am building.</h1>
-      <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-600">
-        This page will collect small projects, experiments, and useful tools as they become ready to share.
-      </p>
+    <section className="page-section">
+      <div className="site-container">
+        <PageHeader
+          eyebrow="Projects"
+          title="Work in progress, kept in one place."
+          description="Small projects become more useful when they have a clear home, a visible purpose, and room to improve."
+        />
 
-      <div className="mt-12 grid gap-6 sm:grid-cols-2">
-        {projects.map((project) => (
-          <article key={project.name} className="rounded-md border border-gray-200 p-6">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-xl font-semibold text-gray-950">{project.name}</h2>
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                {project.status}
-              </span>
-            </div>
-            <p className="mt-4 text-sm leading-6 text-gray-600">{project.description}</p>
-          </article>
-        ))}
+        <div className="mt-12 grid gap-5 md:grid-cols-2">
+          {projects.map((project) => (
+            <article key={project.name} className="content-card flex min-h-64 flex-col">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <h2 className="text-xl font-semibold text-[var(--foreground)]">{project.name}</h2>
+                <span className="status-badge" data-status={project.status}>{project.status}</span>
+              </div>
+              <p className="section-copy mt-5">{project.description}</p>
+              <p className="mt-auto border-t border-[var(--border)] pt-5 text-sm font-medium text-[var(--muted)]">
+                {project.detail}
+              </p>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   )

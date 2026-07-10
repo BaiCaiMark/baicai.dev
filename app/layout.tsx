@@ -1,17 +1,20 @@
 import './globals.css'
 import NavBar from './components/NavBar'
 import Footer from './components/Footer'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 
-const faviconPath = '/favicon.svg?v=3'
+const faviconPath = '/favicon.svg?v=4'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://baicai.dev'),
-  title: 'BaiCai',
-  description: 'Learning in public and building iteratively.',
+  title: {
+    default: 'BaiCai',
+    template: '%s | BaiCai',
+  },
+  description: 'A practical home for useful tools, personal projects, and notes.',
   openGraph: {
     title: 'BaiCai',
-    description: 'Learning in public and building iteratively.',
+    description: 'A practical home for useful tools, personal projects, and notes.',
     url: 'https://baicai.dev',
     siteName: 'BaiCai',
     images: [{ url: faviconPath, width: 1024, height: 1024, alt: 'BaiCai' }],
@@ -22,12 +25,22 @@ export const metadata: Metadata = {
     icon: [{ url: faviconPath, type: 'image/svg+xml', sizes: 'any' }],
     shortcut: [faviconPath],
   },
+  robots: {
+    index: true,
+    follow: true,
+  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#f8faf9',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="flex min-h-screen flex-col bg-white text-gray-900 antialiased">
+      <body className="site-body flex flex-col antialiased">
         <NavBar />
         <main className="flex-1">{children}</main>
         <Footer />

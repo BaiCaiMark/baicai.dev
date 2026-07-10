@@ -1,28 +1,41 @@
+import type { Metadata } from 'next'
+import PageHeader from '../components/PageHeader'
+
+export const metadata: Metadata = {
+  title: 'Notes',
+  description: 'Short notes and lessons from building baicai.dev.',
+}
+
 const notes = [
   {
     title: 'Rebuilding the site',
     date: '2026-06-17',
-    summary: 'Starting again from a clean, simple structure that is easy to maintain.',
+    displayDate: 'June 17, 2026',
+    summary: 'Starting from a clean structure that stays easy to understand, maintain, and improve.',
   },
 ]
 
 export default function NotesPage() {
   return (
-    <section className="mx-auto max-w-3xl px-4 py-16 sm:py-24">
-      <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Notes</p>
-      <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-950">Short notes from the process.</h1>
-      <p className="mt-6 text-lg leading-8 text-gray-600">
-        This section is for lightweight updates, lessons, and ideas worth keeping.
-      </p>
+    <section className="page-section">
+      <div className="site-container">
+        <PageHeader
+          eyebrow="Notes"
+          title="Short notes from the process."
+          description="Decisions, lessons, and small discoveries that are useful enough to keep."
+        />
 
-      <div className="mt-12 space-y-6">
-        {notes.map((note) => (
-          <article key={note.title} className="border-t border-gray-200 pt-6">
-            <p className="text-sm text-gray-500">{note.date}</p>
-            <h2 className="mt-2 text-xl font-semibold text-gray-950">{note.title}</h2>
-            <p className="mt-3 text-sm leading-6 text-gray-600">{note.summary}</p>
-          </article>
-        ))}
+        <div className="mt-12 max-w-3xl border-t border-[var(--border)]">
+          {notes.map((note) => (
+            <article key={note.title} className="grid gap-4 border-b border-[var(--border)] py-8 sm:grid-cols-[150px_1fr]">
+              <time dateTime={note.date} className="text-sm font-medium text-[var(--muted)]">{note.displayDate}</time>
+              <div>
+                <h2 className="text-xl font-semibold text-[var(--foreground)]">{note.title}</h2>
+                <p className="section-copy mt-3">{note.summary}</p>
+              </div>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   )
