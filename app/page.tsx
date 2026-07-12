@@ -26,7 +26,7 @@ export default function Home() {
         <div className="max-w-3xl">
           <div className="flex items-center gap-4">
             <span className="flex size-14 items-center justify-center overflow-hidden rounded-full border border-[var(--border)] bg-white shadow-sm">
-              <Image src="/favicon.svg" width={54} height={54} alt="Mark personal logo" priority />
+              <Image src="/favicon.svg" width={54} height={54} alt="BaiCai website logo" priority />
             </span>
             <p className="eyebrow">Personal workspace</p>
           </div>

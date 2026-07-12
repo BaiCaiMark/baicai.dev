@@ -3,7 +3,7 @@ import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 import type { Metadata, Viewport } from 'next'
 
-const faviconPath = '/favicon.svg?v=5'
+const faviconPath = '/favicon.svg?v=6'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://baicai.dev'),
