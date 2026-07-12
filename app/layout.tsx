@@ -3,7 +3,7 @@ import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 import type { Metadata, Viewport } from 'next'
 
-const faviconPath = '/favicon.svg?v=4'
+const faviconPath = '/favicon.svg?v=5'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://baicai.dev'),
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     description: 'A practical home for useful tools, personal projects, and notes.',
     url: 'https://baicai.dev',
     siteName: 'BaiCai',
-    images: [{ url: faviconPath, width: 1024, height: 1024, alt: 'BaiCai' }],
+    images: [{ url: faviconPath, width: 627, height: 627, alt: 'BaiCai' }],
     locale: 'en_US',
     type: 'website',
   },
