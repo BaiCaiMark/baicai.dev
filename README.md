@@ -9,7 +9,6 @@ A practical personal site for useful tools, projects, notes, and contact informa
 - `/projects` - project list
 - `/tools` - tool directory
 - `/tools/a5-bridge-saw` - A5 bridge saw converter
-- `/tools/scripture` - client-side scripture helper
 - `/notes` - lightweight notes
 - `/contact` - contact details
 

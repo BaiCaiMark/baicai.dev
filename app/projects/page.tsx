@@ -16,7 +16,7 @@ const projects = [
   {
     name: 'Everyday tools',
     status: 'In progress',
-    description: 'A growing set of focused browser tools, beginning with the A5 converter and Scripture Helper.',
+    description: 'A growing set of focused browser tools, beginning with the A5 bridge saw converter.',
     detail: 'Client-side utilities',
   },
 ]

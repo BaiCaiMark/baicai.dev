@@ -25,13 +25,6 @@ export const tools: ToolItem[] = [
       'Machine-ready millimeter values for the A5 bridge saw, plus inch, millimeter, and fraction helpers.',
   },
   {
-    name: 'Scripture Helper',
-    status: 'Draft',
-    href: '/tools/scripture',
-    description:
-      'Import local scripture data, find references, copy formatted passages, and prepare a weekly list.',
-  },
-  {
     name: 'More everyday tools',
     status: 'Planned',
     href: null,
