@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+<title id="title">baicai.dev compact B mark</title>
+<defs><linearGradient id="g" x1="20" y1="18" x2="106" y2="112"><stop stop-color="#35B7A6"/><stop offset=".55" stop-color="#72D06B"/><stop offset="1" stop-color="#B8F58B"/></linearGradient></defs>
+<g fill="none" stroke="url(#g)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+<path d="M43 20v88"/>
+<path d="M43 22h24c21 0 34 10 34 25 0 14-11 23-30 24"/>
+<path d="M43 71h27c23 0 37 10 37 27 0 17-14 25-38 25H43"/>
+<path d="M20 39h23M20 64h23"/>
+<path d="M50 95c10-16 28-20 42-11-8 17-24 26-42 24"/>
+</g><g fill="#B8F58B"><circle cx="20" cy="39" r="5"/><circle cx="20" cy="64" r="5"/></g></svg>

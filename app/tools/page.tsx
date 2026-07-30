@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import PageHeader from '../components/PageHeader'
 import { tools } from '../data/site'
@@ -22,11 +23,22 @@ export default function ToolsPage() {
           {tools.map((tool) => {
             const card = (
               <article className="tool-card flex min-h-64 flex-col">
-                <span className="status-badge" data-status={tool.status}>{tool.status}</span>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="tool-card-mark">
+                    <Image
+                      src="/brand/logo/logo-mark-primary.svg"
+                      width={28}
+                      height={28}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </span>
+                  <span className="status-badge" data-status={tool.status}>{tool.status}</span>
+                </div>
                 <h2 className="mt-5 text-xl font-semibold text-[var(--foreground)]">{tool.name}</h2>
                 <p className="section-copy mt-3">{tool.description}</p>
                 {tool.href ? (
-                  <p className="mt-auto pt-6 text-sm font-semibold text-[var(--brand-strong)]">Open tool -&gt;</p>
+                  <p className="mt-auto pt-6 text-sm font-semibold text-[var(--brand-strong)]">Open tool</p>
                 ) : (
                   <p className="mt-auto pt-6 text-sm font-medium text-[var(--muted)]">Planned</p>
                 )}

@@ -1,0 +1,45 @@
+:root {
+  /* baicai.dev brand palette */
+  --bc-bg: #071015;
+  --bc-surface: #0E1D22;
+  --bc-surface-2: #13272D;
+  --bc-primary: #72D06B;
+  --bc-primary-soft: #B8F58B;
+  --bc-accent: #35B7A6;
+  --bc-cream: #E8DFC8;
+  --bc-text: #F5F7F2;
+  --bc-text-muted: #95A29B;
+  --bc-border: rgba(184, 245, 139, 0.18);
+  --bc-glow: 0 0 32px rgba(114, 208, 107, 0.18);
+
+  --bc-radius-sm: 10px;
+  --bc-radius-md: 18px;
+  --bc-radius-lg: 28px;
+}
+
+[data-theme="light"] {
+  --bc-bg: #F4F0E7;
+  --bc-surface: #FFFFFF;
+  --bc-surface-2: #E9EFE8;
+  --bc-primary: #2F7E4A;
+  --bc-primary-soft: #5FAE65;
+  --bc-accent: #187D76;
+  --bc-cream: #F4F0E7;
+  --bc-text: #071015;
+  --bc-text-muted: #52625C;
+  --bc-border: rgba(7, 16, 21, 0.14);
+  --bc-glow: none;
+}
+
+/* Recommended navbar mark sizes */
+.bc-logo-mark { width: 32px; height: 32px; display: block; }
+.bc-logo-lockup { height: 36px; width: auto; display: block; }
+
+/* A1 is a feature image, not a favicon. */
+.bc-watcher {
+  width: min(440px, 78vw);
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 28px;
+  box-shadow: var(--bc-glow);
+}

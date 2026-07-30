@@ -109,7 +109,7 @@ export default function A5BridgeSawPage() {
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {fieldLabels.map((field) => (
-            <div key={field.key} className="rounded-lg border border-[var(--border)] bg-white p-4">
+            <div key={field.key} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
               <p className="text-xs font-semibold uppercase text-[var(--muted)]">{field.label} output</p>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--foreground)]">
                 {outputs[field.key] || '--'}

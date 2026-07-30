@@ -3,27 +3,39 @@ import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 import type { Metadata, Viewport } from 'next'
 
-const faviconPath = '/favicon.svg?v=8'
-
 export const metadata: Metadata = {
   metadataBase: new URL('https://baicai.dev'),
   title: {
-    default: 'BaiCai',
-    template: '%s | BaiCai',
+    default: 'baicai.dev',
+    template: '%s | baicai.dev',
   },
   description: 'A practical home for useful tools, personal projects, and notes.',
+  applicationName: 'baicai.dev',
+  manifest: '/site.webmanifest',
   openGraph: {
-    title: 'BaiCai',
+    title: 'baicai.dev',
     description: 'A practical home for useful tools, personal projects, and notes.',
     url: 'https://baicai.dev',
-    siteName: 'BaiCai',
-    images: [{ url: faviconPath, width: 725, height: 725, alt: 'BaiCai' }],
+    siteName: 'baicai.dev',
+    images: [
+      {
+        url: '/brand/social/og-brand-card-1200x630.png',
+        width: 1200,
+        height: 630,
+        alt: 'baicai.dev brand card',
+      },
+    ],
     locale: 'en_US',
     type: 'website',
   },
   icons: {
-    icon: [{ url: faviconPath, type: 'image/svg+xml', sizes: 'any' }],
-    shortcut: [faviconPath],
+    icon: [
+      { url: '/brand/favicon/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/brand/favicon/favicon-32x32.png', type: 'image/png', sizes: '32x32' },
+      { url: '/brand/favicon/favicon-16x16.png', type: 'image/png', sizes: '16x16' },
+    ],
+    shortcut: ['/favicon.ico'],
+    apple: [{ url: '/brand/favicon/apple-touch-icon.png', sizes: '180x180' }],
   },
   robots: {
     index: true,
@@ -34,7 +46,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#f8faf9',
+  themeColor: '#071015',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

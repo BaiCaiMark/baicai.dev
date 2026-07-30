@@ -9,6 +9,7 @@ export default defineConfig([
     '.next/**',
     'out/**',
     'build/**',
+    'baicai-brand-kit/**',
     'next-env.d.ts',
   ]),
 ])
