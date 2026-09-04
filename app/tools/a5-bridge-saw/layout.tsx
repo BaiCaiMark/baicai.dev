@@ -1,9 +1,7 @@
-import type { Metadata } from 'next'
+import { a5Tool } from '../../data/site'
+import { pageMetadata } from '../../lib/metadata'
 
-export const metadata: Metadata = {
-  title: 'A5 Bridge Saw Converter',
-  description: 'Custom inch to machine millimeter conversion for the A5 bridge saw.',
-}
+export const metadata = pageMetadata(a5Tool.name, a5Tool.description, a5Tool.href)
 
 export default function A5BridgeSawLayout({ children }: { children: React.ReactNode }) {
   return children

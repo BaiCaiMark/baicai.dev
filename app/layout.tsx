@@ -2,32 +2,14 @@ import './globals.css'
 import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 import type { Metadata, Viewport } from 'next'
+import { site } from './data/site'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://baicai.dev'),
-  title: {
-    default: 'baicai.dev',
-    template: '%s | baicai.dev',
-  },
-  description: 'A practical home for useful tools, personal projects, and notes.',
-  applicationName: 'baicai.dev',
+  metadataBase: new URL(site.url),
+  title: { default: site.name, template: `%s | ${site.name}` },
+  description: site.description,
+  applicationName: site.name,
   manifest: '/site.webmanifest',
-  openGraph: {
-    title: 'baicai.dev',
-    description: 'A practical home for useful tools, personal projects, and notes.',
-    url: 'https://baicai.dev',
-    siteName: 'baicai.dev',
-    images: [
-      {
-        url: '/brand/social/og-brand-card-1200x630.png',
-        width: 1200,
-        height: 630,
-        alt: 'baicai.dev brand card',
-      },
-    ],
-    locale: 'en_US',
-    type: 'website',
-  },
   icons: {
     icon: [
       { url: '/brand/favicon/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
@@ -37,24 +19,22 @@ export const metadata: Metadata = {
     shortcut: ['/favicon.ico'],
     apple: [{ url: '/brand/favicon/apple-touch-icon.png', sizes: '180x180' }],
   },
-  robots: {
-    index: true,
-    follow: true,
-  },
+  robots: { index: true, follow: true },
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#071015',
+  themeColor: '#161817',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="site-body flex flex-col antialiased">
+        <a href="#main-content" className="skip-link">Skip to content</a>
         <NavBar />
-        <main className="flex-1">{children}</main>
+        <main id="main-content" tabIndex={-1} className="flex-1">{children}</main>
         <Footer />
       </body>
     </html>

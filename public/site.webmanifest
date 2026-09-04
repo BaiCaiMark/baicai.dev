@@ -1,6 +1,9 @@
 {
-  "name": "baicai.dev",
-  "short_name": "baicai",
+  "name": "BaiCai",
+  "short_name": "BaiCai",
+  "id": "/",
+  "start_url": "/tools",
+  "scope": "/",
   "icons": [
     {
       "src": "/brand/favicon/android-chrome-192x192.png",
@@ -19,7 +22,7 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#071015",
-  "background_color": "#071015",
+  "theme_color": "#161817",
+  "background_color": "#161817",
   "display": "standalone"
 }

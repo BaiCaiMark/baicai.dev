@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { site } from '../data/site'
 
 type BrandLogoProps = {
   compact?: boolean
@@ -14,16 +15,15 @@ export default function BrandLogo({ compact = false, className = '' }: BrandLogo
       className={`brand-logo no-underline ${className}`}
     >
       <Image
-        src="/brand/logo/logo-mark-primary.svg"
+        src={site.logo}
         width={32}
         height={32}
         alt=""
         aria-hidden="true"
-        priority
       />
       {!compact ? (
         <span className="brand-logo-text">
-          baicai<span>.dev</span>
+          {site.name}<span>.dev</span>
         </span>
       ) : null}
     </Link>

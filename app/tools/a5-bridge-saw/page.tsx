@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import PageHeader from '../../components/PageHeader'
+import Link from 'next/link'
+import { a5Tool } from '../../data/site'
 
 type FieldKey = 'x' | 'y' | 'width' | 'height'
 
@@ -80,106 +82,76 @@ export default function A5BridgeSawPage() {
   return (
     <section className="page-section">
       <div className="site-container">
+        <nav className="tool-breadcrumb" aria-label="Breadcrumb">
+          <Link href="/tools">Tools</Link><span aria-hidden="true">/</span><span aria-current="page">A5</span>
+        </nav>
         <PageHeader
-          eyebrow="Tools / A5 Bridge Saw"
-          title="A5 bridge saw converter."
-          description="Custom inch to machine millimeter conversion for the A5 bridge saw. Enter the stone position and size in inches, then use the millimeter values for the machine."
-          actions={(
-            <button type="button" onClick={resetA5Defaults} className="button-secondary">
-              Reset defaults
-            </button>
-          )}
+          eyebrow="Work / A5"
+          title={a5Tool.name}
+          description={a5Tool.description}
+          actions={<button type="button" onClick={resetA5Defaults} className="button-secondary">Reset defaults</button>}
         />
-
-        <div className="mt-10 border-y border-[var(--border)] bg-[var(--surface-muted)] px-0 py-6 sm:px-6">
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="a5-fields">
           {fieldLabels.map((field) => (
-            <label key={field.key} className="block">
-              <span className="text-sm font-semibold text-[var(--foreground)]">{field.label}</span>
-              <span className="mt-1 block text-xs text-[var(--muted)]">{field.hint}</span>
+            <div className="a5-field" key={field.key}>
+              <label htmlFor={`a5-${field.key}`} className="block">
+                <span className="text-sm font-semibold">{field.label}</span>
+                <span className="mt-1 block text-xs text-[var(--muted)]">{field.hint}</span>
+              </label>
               <input
+                id={`a5-${field.key}`}
                 inputMode="decimal"
                 value={values[field.key]}
                 onChange={(event) => updateField(field.key, event.target.value)}
-                className="field-input mt-3 text-lg font-semibold tabular-nums"
+                className="field-input mt-3 tabular-nums"
               />
-            </label>
-          ))}
-        </div>
-
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {fieldLabels.map((field) => (
-            <div key={field.key} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">{field.label} output</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--foreground)]">
-                {outputs[field.key] || '--'}
-              </p>
-              <p className="mt-1 text-xs text-[var(--muted)]">mm</p>
+              <div className="a5-output">
+                <p id={`label-${field.key}-output`} className="text-xs text-[var(--muted)]">{field.label} output</p>
+                <output htmlFor={`a5-${field.key}`} aria-labelledby={`label-${field.key}-output`} className="tabular-nums">{outputs[field.key] || '--'}</output>
+                <p className="text-xs text-[var(--muted)]">mm</p>
+              </div>
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="mt-8 grid gap-5 lg:grid-cols-2">
-        <div className="content-card">
-          <p className="eyebrow">Unit converter</p>
-          <h2 className="section-heading mt-2">Inch and mm</h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-            <label className="block">
-              <span className="text-sm font-semibold text-[var(--foreground)]">Inch</span>
-              <input
-                inputMode="decimal"
-                value={inch}
-                onChange={(event) => updateFromInch(event.target.value)}
-                className="field-input mt-2 text-lg font-semibold tabular-nums"
-              />
-            </label>
-            <div className="hidden pb-3 text-[var(--muted)] sm:block">=</div>
-            <label className="block">
-              <span className="text-sm font-semibold text-[var(--foreground)]">mm</span>
-              <input
-                inputMode="decimal"
-                value={mm}
-                onChange={(event) => updateFromMm(event.target.value)}
-                className="field-input mt-2 text-lg font-semibold tabular-nums"
-              />
-            </label>
-          </div>
-        </div>
-
-        <div className="content-card">
-          <p className="eyebrow">Fraction helper</p>
-          <h2 className="section-heading mt-2">Sixteenths to decimal</h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-            <label className="block">
-              <span className="text-sm font-semibold text-[var(--foreground)]">Numerator 1-16</span>
-              <input
-                inputMode="numeric"
-                value={fraction}
-                onChange={(event) => setFraction(event.target.value)}
-                className="field-input mt-2 text-lg font-semibold tabular-nums"
-              />
-            </label>
-            <div className="hidden pb-3 text-[var(--muted)] sm:block">/16 =</div>
-            <div className="rounded-lg bg-[var(--surface-muted)] p-4">
-              <p className="text-xs font-semibold uppercase text-[var(--muted)]">Decimal</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--foreground)]">
-                {fractionResult || '--'}
-              </p>
+        <div className="mt-8 grid gap-8 lg:grid-cols-2">
+          <section className="content-card" aria-labelledby="unit-heading">
+            <p className="eyebrow">Unit converter</p>
+            <h2 id="unit-heading" className="section-heading mt-2">Inch and mm</h2>
+            <div className="mt-5 grid grid-cols-2 gap-4">
+              <label className="block">
+                <span className="text-sm font-semibold">Inch</span>
+                <input inputMode="decimal" value={inch} onChange={(event) => updateFromInch(event.target.value)} className="field-input mt-2 tabular-nums" />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold">mm</span>
+                <input inputMode="decimal" value={mm} onChange={(event) => updateFromMm(event.target.value)} className="field-input mt-2 tabular-nums" />
+              </label>
             </div>
+          </section>
+          <section className="content-card" aria-labelledby="fraction-heading">
+            <p className="eyebrow">Fraction helper</p>
+            <h2 id="fraction-heading" className="section-heading mt-2">Sixteenths to decimal</h2>
+            <div className="mt-5 grid grid-cols-2 items-end gap-4">
+              <label className="block">
+                <span className="text-sm font-semibold">Numerator 1-16</span>
+                <input id="fraction" inputMode="numeric" value={fraction} onChange={(event) => setFraction(event.target.value)} className="field-input mt-2 tabular-nums" />
+              </label>
+              <div>
+                <p id="decimal-label" className="text-xs text-[var(--muted)]">Decimal / 16</p>
+                <output htmlFor="fraction" aria-labelledby="decimal-label" className="mt-2 block py-3 text-2xl font-semibold tabular-nums">{fractionResult || '--'}</output>
+              </div>
+            </div>
+          </section>
+        </div>
+        <section className="mt-8 border-t border-[var(--border)] pt-6" aria-labelledby="parameters-heading">
+          <h2 id="parameters-heading" className="section-heading">A5 machine parameters</h2>
+          <div className="mt-4 grid gap-3 text-sm leading-6 text-[var(--muted)] md:grid-cols-2">
+            <p>X output = X inch x 25.4 + 62.9899 + 3.175</p>
+            <p>Y output = Y inch x 25.4 + 351.372</p>
+            <p>Width output = Width inch x 25.4</p>
+            <p>Height output = Height inch x 25.4</p>
           </div>
-        </div>
-      </div>
-
-      <div className="mt-10 border-t border-[var(--border)] pt-8">
-        <h2 className="text-lg font-semibold text-[var(--foreground)]">A5 machine parameters</h2>
-        <div className="mt-4 grid gap-3 text-sm leading-6 text-[var(--muted)] md:grid-cols-2">
-          <p>X output = X inch x 25.4 + 62.9899 + 3.175</p>
-          <p>Y output = Y inch x 25.4 + 351.372</p>
-          <p>Width output = Width inch x 25.4</p>
-          <p>Height output = Height inch x 25.4</p>
-        </div>
-      </div>
+        </section>
       </div>
     </section>
   )
