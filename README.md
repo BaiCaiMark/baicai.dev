@@ -1,11 +1,13 @@
-# BaiCai
+# baicai.dev
 
-A personal workshop for practical tools, ongoing projects, and notes worth keeping.
-Next.js 16, React 19, TypeScript, Tailwind CSS 4, deployed through Vercel.
+A personal site for practical tools, notes, and projects. The local
+`redesign/bright-sage` branch applies the bright sage design kit from the
+parent project directory. Next.js 16, React 19, TypeScript, and Tailwind CSS 4.
+The local redesign has not been pushed or deployed.
 
 ## Routes
 
-- `/`: short introduction, active tools, current projects, recent notes
+- `/`: editorial introduction, four sections, real recent notes and current work
 - `/tools`: tools grouped by category
 - `/tools/a5-bridge-saw`: A5 machine conversion, unit conversion, sixteenths
 - `/projects`: current project collection
@@ -13,6 +15,7 @@ Next.js 16, React 19, TypeScript, Tailwind CSS 4, deployed through Vercel.
 - `/about`: introduction and working principles
 - `/contact`: email contact (linked from the footer)
 - `/sitemap.xml`, `/robots.txt`: generated from current site data
+- `/opengraph-image`: generated social preview using the official kit logo
 
 Scripture Helper was deliberately removed in commit `89ecb74`.
 It is not an existing V2 tool; `/tools/scripture` continues to return 404.
@@ -45,15 +48,18 @@ first; dates display in UTC consistently. There is no CMS or database.
 - `PageHeader`: page heading and optional actions
 - `SectionHeader`: repeated section heading and optional directory link
 - `ToolCard`, `ProjectCard`, `NoteList`, `StatusBadge`: shared content views
-- `BrandLogo`: existing Future B mark
-- `app/globals.css`: neutral dark theme, green brand accent, responsive layout
+- `BrandLogo`: official bright sage kit mark, with small variant on mobile
+- `PortalCard`: the four home section links
+- `app/globals.css`: kit color tokens, typography, page layouts, responsive rules
 
-Only navigation's current-route detection and A5's interactive page require
-client components. A5 calculation logic stays inside its own route.
+Only navigation's current-route detection, search/theme controls, and A5's
+interactive page require client components. A5 calculation logic stays inside
+its own route.
 
-Brand source files remain in `baicai-brand-kit/`; deployed assets are in
-`public/brand/`. Future B remains the navigation/favicon/PWA identity.
-A1 is a supporting emblem on About and 404, not a large homepage hero.
+The selected design source is `../baicai-light-green-theme-kit/`. Its deployed
+logo and icons are copied into `public/theme/`, and its favicon/PWA icons are
+in `public/`. The previous brand kit remains in the repository as historical
+material, but is no longer used in the interface.
 
 ## Local development and validation
 
@@ -61,15 +67,13 @@ A1 is a supporting emblem on About and 404, not a large homepage hero.
 npm install
 npm run dev
 npm run lint
+npx tsc --noEmit
 npm run build
-npm run start
-```
-
-The default preview is `http://localhost:3000`. To use a different port:
-
-```sh
 npm run start -- -H 127.0.0.1 -p 3010
 ```
+
+The production preview above is `http://127.0.0.1:3010`. The development
+server remains available with `npm run dev` at `http://localhost:3000`.
 
 Before publishing, check the routes above at phone, tablet, and desktop widths.
 Verify all A5 defaults, four outputs, reset, both unit-conversion directions,

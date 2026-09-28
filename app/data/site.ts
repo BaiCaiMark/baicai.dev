@@ -1,18 +1,18 @@
 export const site = {
-  name: 'BaiCai',
+  name: 'baicai.dev',
   url: 'https://baicai.dev',
-  description: 'A personal workshop for practical tools, ongoing projects, and notes worth keeping.',
+  description: 'A bright, quiet corner for practical tools, notes, projects, and the ideas I want to keep.',
   email: 'baicai.exe@gmail.com',
   github: 'https://github.com/BaiCaiMark/baicai.dev',
-  logo: '/brand/logo/logo-mark-primary.svg',
-  shareImage: '/brand/social/og-brand-card-1200x630.png',
+  logo: '/theme/logo/eclipse-ring-mark-transparent-1024.png',
+  shareImage: '/opengraph-image',
 } as const
 
 export const navItems = [
   { href: '/', label: 'Home' },
+  { href: '/notes', label: 'Notes' },
   { href: '/tools', label: 'Tools' },
   { href: '/projects', label: 'Projects' },
-  { href: '/notes', label: 'Notes' },
   { href: '/about', label: 'About' },
 ] as const
 
@@ -43,6 +43,7 @@ export const a5Tool = {
   status: 'Active',
   category: 'Work',
   shortLabel: 'A5',
+  icon: '/theme/icons/tools.svg',
 } satisfies ToolItem
 
 export const tools: ToolItem[] = [a5Tool]

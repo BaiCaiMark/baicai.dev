@@ -19,7 +19,7 @@ export default function AboutPage() {
         <div className="about-intro">
           <PageHeader eyebrow="Behind the workshop" title="Hi, I am Mark." description="BaiCai is my personal workspace for practical tools, small projects, and ideas I want to keep. It is designed to stay useful as it grows." />
           <div className="about-identity">
-            <Image src="/brand/badge/baicai-watcher-a1-256.png" width={256} height={256} sizes="104px" className="about-avatar" alt="BaiCai Watcher brand emblem" />
+            <Image src="/theme/logo/eclipse-ring-mark-transparent-1024.png" width={1024} height={1024} sizes="104px" className="about-avatar" alt="baicai.dev Eclipse Ring mark" />
             <div>
               <p className="section-copy">Work, experiments, and everyday learning, collected in one place.</p>
               <Link href="/contact" className="text-link">Get in touch</Link>

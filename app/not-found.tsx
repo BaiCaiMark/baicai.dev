@@ -7,7 +7,7 @@ export default function NotFound() {
     <section className="page-section">
       <div className="site-container">
         <div className="not-found-content">
-          <Image src="/brand/badge/baicai-watcher-a1-256.png" width={256} height={256} sizes="96px" className="not-found-emblem" alt="BaiCai Watcher brand emblem" />
+          <Image src="/theme/logo/eclipse-ring-mark-transparent-1024.png" width={1024} height={1024} sizes="96px" className="not-found-emblem" alt="baicai.dev Eclipse Ring mark" />
           <PageHeader eyebrow="404" title="Page not found." description="The page may have moved, or the address may be incomplete." />
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/" className="button-secondary">Go home</Link>

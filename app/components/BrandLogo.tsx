@@ -16,14 +16,16 @@ export default function BrandLogo({ compact = false, className = '' }: BrandLogo
     >
       <Image
         src={site.logo}
-        width={32}
-        height={32}
+        width={40}
+        height={40}
         alt=""
         aria-hidden="true"
+        className="brand-mark-full"
       />
+      <Image src={site.logo} width={40} height={40} alt="" aria-hidden="true" className="brand-mark-small" />
       {!compact ? (
         <span className="brand-logo-text">
-          {site.name}<span>.dev</span>
+          {site.name}
         </span>
       ) : null}
     </Link>
