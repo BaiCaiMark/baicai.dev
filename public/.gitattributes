@@ -1,0 +1,2 @@
+# Preserve the offline/HTTPS comparison document byte-for-byte on Windows.
+zolith-test.html text eol=lf
