@@ -72,6 +72,7 @@ async function homeSnapshot(page) {
       assert.equal(response.status(), 200);
       assert(response.headers()['content-type'].includes('text/html'));
       assert(response.headers()['x-robots-tag'].includes('noindex'));
+      assert(response.headers()['cache-control'].includes('no-transform'));
       record.servedSha256 = hash(await response.body());
       assert.equal(record.servedSha256, hash(original), 'HTTPS/HTTP bytes equal offline original');
       await page.locator('#controls').waitFor({ state: 'visible' });

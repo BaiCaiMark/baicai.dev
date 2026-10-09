@@ -11,7 +11,9 @@ const nextConfig: NextConfig = {
       source,
       headers: [
         { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
-        { key: "Cache-Control", value: "no-store" },
+        // Prevent the domain's existing Cloudflare proxy from injecting its
+        // analytics beacon into this exact offline/HTTPS comparison document.
+        { key: "Cache-Control", value: "no-store, no-transform" },
       ],
     }));
   },

@@ -21,13 +21,23 @@ C:\BaiCai\Codex\StoneMatch\prototypes\offline-review\Zolith-Review-Compatibility
 - HTML/CSS/JavaScript and all interaction logic remain unchanged. All resources
   are embedded; the sample makes no application network requests.
 - `next.config.ts` rewrites only `/zolith-test` to `/zolith-test.html`. Both paths
-  receive `X-Robots-Tag: noindex, nofollow, noarchive` and `Cache-Control: no-store`.
+  receive `X-Robots-Tag: noindex, nofollow, noarchive` and
+  `Cache-Control: no-store, no-transform`.
 - The response is a standalone static document. It does not use React, the site's
   root layout, styles, navigation, fonts, analytics or client-side routing.
 - `public/.gitattributes` keeps this HTML's LF bytes stable on Windows checkouts.
 
 No homepage/nav/content/sitemap changes, dependencies, API, login, database or
 subdomain are introduced. The URL is public; noindex is not access control.
+
+The initial custom-domain verification detected the domain's existing Cloudflare
+proxy injecting its Web Analytics beacon into this document, while the direct
+Vercel Preview preserved the original bytes. The route-specific `no-transform`
+directive prevents intermediary payload changes for these two sample paths,
+without changing Cloudflare account settings or other site pages. Cloudflare
+documents this behavior in its [Web Analytics FAQ](https://developers.cloudflare.com/web-analytics/faq/).
+Acceptance checks require exact HTML bytes as well as a working viewer; a
+successful Vercel build alone does not detect this custom-domain difference.
 
 The site's existing GitHub/Vercel connection is retained: `BaiCaiMark/baicai.dev`,
 production branch `main`, Vercel project `baicai-dev`, team `Mark's projects`
