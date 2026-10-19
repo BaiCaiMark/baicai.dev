@@ -10,7 +10,7 @@ import BrandLogo from './BrandLogo'
 const searchable = [
   ...navItems.map((item) => ({ title: item.label, description: `${item.label} on baicai.dev`, href: item.href, type: 'Page' })),
   ...activeTools.flatMap((tool) => tool.href ? [{ title: tool.name, description: tool.description, href: tool.href, type: 'Tool' }] : []),
-  ...projects.map((project) => ({ title: project.name, description: project.description, href: project.href, type: 'Project' })),
+  ...projects.map((project) => ({ title: project.name, description: project.description, href: project.href ?? `/projects#${project.slug}`, type: 'Project' })),
   ...notes.map((note) => ({ title: note.title, description: note.summary, href: `/notes#${note.slug}`, type: 'Note' })),
 ]
 
