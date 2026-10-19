@@ -68,6 +68,13 @@ export const projects: ProjectItem[] = [
     detail: 'Windows desktop · Stone layout / DXF · In development',
   },
   {
+    name: 'Yoru',
+    slug: 'yoru',
+    status: 'Active',
+    description: 'A self-hosted AI agent running around the clock on an fnOS NAS. It delivers system status through Telegram and supports selected, controlled NAS and Docker management tasks.',
+    detail: 'fnOS NAS · OpenClaw / Telegram / Docker · Running',
+  },
+  {
     name: 'PDF Export Studio',
     slug: 'pdf-export-studio',
     status: 'Active',
