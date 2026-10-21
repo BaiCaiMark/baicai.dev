@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yoru Gmail — private email assistant</title>
+  <meta name="description" content="Information about the owner's private, read-only Gmail assistant.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <a class="back" href="/">BaiCai</a>
+  <p class="eyebrow">Personal project · application information</p>
+  <h1>Yoru Gmail</h1>
+  <p class="lead">A private email assistant for its owner. This Desktop OAuth application is not offered for public signup or distribution.</p>
+  <h2>What it does</h2>
+  <p>Yoru checks the owner's connected Gmail account for new messages, identifies potentially important immigration correspondence, summarizes relevant messages in Traditional Chinese, saves permitted original attachments to the owner's private NAS, and sends a notification to the owner's existing private Telegram chat.</p>
+  <h2>Read-only Google access</h2>
+  <p>The only requested Google permission is <code>https://www.googleapis.com/auth/gmail.readonly</code>. Google grants read access to the connected mailbox and attachments; Yoru's own rules limit routine processing to relevant new mail. It cannot send, modify, or delete Gmail messages.</p>
+  <h2>Where processing happens</h2>
+  <p>Monitoring and attachment storage run on the owner's NAS. Selected, bounded message content is sent to the existing OpenAI-powered assistant for interpretation. Summaries and processing results are delivered through Telegram. The website itself does not connect to Gmail or receive Google credentials.</p>
+  <h2>Control and limitations</h2>
+  <p>The owner can stop monitoring or revoke Google access at any time. Sender identity is not assumed from a display name. Summaries can be incomplete or incorrect: verify important dates and instructions against the original email. Yoru does not reply, submit documents, or make immigration decisions.</p>
+  <nav aria-label="Application information"><a href="privacy.html">Privacy policy</a><a href="terms.html">Use and limitations</a><a href="/contact">Contact the developer</a></nav>
+  <footer>Maintained by Mark / BaiCai. Updated 20 October 2026. An independent personal project, not a Google product or endorsement.</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yoru Gmail — privacy policy</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <a class="back" href="index.html">Yoru Gmail</a>
+  <p class="eyebrow">Private, single-user application</p>
+  <h1>Privacy policy</h1>
+  <p class="lead">This policy describes the owner's personal Gmail integration, not a public email service. Effective 20 October 2026.</p>
+  <h2>Information accessed and purpose</h2>
+  <p>With the owner's Google consent, Yoru uses <code>gmail.readonly</code> to read message identifiers, headers, sender and recipient information, timestamps, message text, and eligible attachments. The permission covers the connected mailbox. In normal operation, Yoru establishes a starting point and incrementally checks new mail rather than importing years of history.</p>
+  <p>Deterministic rules first select potentially relevant correspondence. Relevant, bounded message text and source details are used to produce summaries, identify explicitly stated deadlines, and highlight matters for the owner. Permitted attachments are saved as originals with source information and SHA-256 integrity evidence.</p>
+  <h2>Storage and access</h2>
+  <p>OAuth credentials and synchronization records are encrypted at rest in the owner's restricted NAS execution environment. Tokens are not made available to the general assistant workspace or public website. Original attachments are stored in the owner's authorized NAS document workspace with its existing file permissions; this policy does not claim those files or every backup are encrypted.</p>
+  <h2>Service providers and disclosure</h2>
+  <p>Google provides mailbox access. Bounded relevant email content is transmitted to the owner's existing OpenAI-powered assistant for summarization. Telegram receives notifications and the message source details and summaries included in them. These providers process transmitted data under their applicable terms and privacy policies. Yoru does not routinely send original attachments to the model.</p>
+  <p>Yoru does not sell Google user data, use it for advertising, or use it to train a shared general-purpose model. Processing is limited to the owner's authorized personal assistant workflow and the service providers needed to perform it.</p>
+  <p>Yoru Gmail's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+  <h2>Retention and deletion</h2>
+  <p>Original emails remain in Gmail and are not deleted or modified by Yoru. Saved attachments remain on the NAS until the owner removes them. Restricted synchronization, provenance, recovery records, and encrypted audit receipts are retained for reliability and diagnosis, subject to configured size limits and owner review. There is currently no automatic content-expiry schedule for all records or backups. Successful processing removes working message text and summaries from the active coordinator record, but encrypted receipts and Telegram messages may retain copies.</p>
+  <h2>Owner control</h2>
+  <p>The owner can stop monitoring and revoke this application's access from <a href="https://myaccount.google.com/connections">Google Account connections</a>. Revocation stops future authorized mailbox access; it does not erase existing NAS files, Telegram notifications, or backups. The owner can request controlled removal of those copies separately. Permanent or bulk deletion requires explicit confirmation.</p>
+  <h2>This information website</h2>
+  <p>These pages do not collect mailbox data, passwords, OAuth authorization codes, or tokens, and provide no Gmail login form. The existing website hosting and network providers may process ordinary website access logs independently of the NAS mail workflow.</p>
+  <nav aria-label="Application information"><a href="index.html">Application information</a><a href="terms.html">Use and limitations</a><a href="/contact">Privacy contact</a></nav>
+</main>
+</body>
+</html>
