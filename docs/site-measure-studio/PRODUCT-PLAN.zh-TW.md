@@ -226,3 +226,9 @@
 - 新增獨立 Reference measurement 與 part/edge note；量測記錄不必驅動幾何。額外數值與描述可保存、恢復並交付 PDF。
 - 移除主要介面的 metadata 與分數下拉選單，保留原始語義及分數輸入能力，以進階選項呈現 Estimate / Needs Check / Unknown 等狀態。
 - Schema 2 安全讀取舊 schema 1 工程；不得丟棄舊量測。細節、測試與限制見 [PREVIEW-2.md](PREVIEW-2.md)。
+
+## 16. Preview 3 / 3.1 — 統一畫布與觸控修整
+
+Preview 3 改為同一 Area 的連續 SVG 畫布，所有 Part 共用顯示比例。Preview 3.1 以可見拖曳控制點取代主要流程中的 Move 模式切換，加入畫面距離判定的邊線選取、游標位置分數快捷輸入，以及主要編輯區直接可見的 selected-edge Overhang。編輯器保留縮放比例，必要時平移以露出所選邊線。
+
+量測／幾何模型、schema 2、本機保存及 PDF/DXF 計算均維持原樣；成品邊長仍由既有 solver 計算，不把同一邊的 allowance 直接加到該邊長。詳見 [PREVIEW-3.md](PREVIEW-3.md) 與 [PREVIEW-3.1.md](PREVIEW-3.1.md)。真實 Android/Huawei 鍵盤、觸控筆和 AutoCAD 驗收仍待實機確認。

@@ -51,6 +51,8 @@ test('move changes neither exported native DXF contours nor PDF measurement rows
   const after=exportSnapshot(p)
   assert.deepEqual(contours(createDxf(after).text),original);assert.deepEqual(after.entries.map(e=>e.rows),rows)
   const font=new Uint8Array(fs.readFileSync('public/fonts/site-measure/NotoSansTC-Regular.ttf'))
+  fs.writeFileSync('artifacts/site-measure/preview31-before-layout.pdf',createPdf(before,font))
+  fs.writeFileSync('artifacts/site-measure/preview31-after-layout.pdf',createPdf(after,font))
   fs.writeFileSync('artifacts/site-measure/preview3-layout.pdf',createPdf(after,font))
   fs.writeFileSync('artifacts/site-measure/preview3-layout.dxf',createDxf(after).text)
 })

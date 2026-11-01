@@ -151,7 +151,7 @@ export default function Studio() {
   const excluded = all?.entries.filter(e => !e.geometry.top) ?? []
   const dirty = !!project && savedProject !== project
   return <div className="sm-studio" data-active={!!project} lang="en">
-    <header className="sm-heading"><div><p className="sm-eyebrow">FIELD WORKSHEET · PREVIEW 3</p><h1>Site Measure Studio</h1></div><span className="sm-local-pill">Local projects · no account needed</span></header>
+    <header className="sm-heading"><div><p className="sm-eyebrow">FIELD WORKSHEET · PREVIEW 3.1</p><h1>Site Measure Studio</h1></div><span className="sm-local-pill">Local projects · no account needed</span></header>
     <div className="sm-toolbar">
       <details className="sm-project-menu"><summary>Project</summary><div className="sm-project-popover">
         <button disabled={!ready} onClick={()=>void switchProject(newProject())}>New project</button><button disabled={!ready} onClick={()=>void switchProject(worksheetSample())}>Open sample worksheet</button><button onClick={()=>importer.current?.click()}>Import backup as a copy</button>

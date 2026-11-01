@@ -3,6 +3,7 @@ import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type Rea
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
 import { edgeOrder, value, type Area, type Edge } from '../core/model'
 import { edgeNames, edgeLength, worksheetLayout } from '../core/worksheet'
+import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
@@ -12,9 +13,11 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
-  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;position:Point|null} | null>(null)
+  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;position:Point|null;handle:boolean} | null>(null)
   const moved = useRef(false)
   const [manual,setManual]=useState<Bounds|null>(null),[ratio,setRatio]=useState(1.8)
+  const [canvasSize,setCanvasSize]=useState({width:1000,height:600})
+  const manualView=useRef(false)
   const [drag,setDrag]=useState<{id:string;position:Point}|null>(null)
   const layout=useMemo(()=>worksheetLayout(area.shapes),[area.shapes])
   const fitted=useMemo(()=>{
@@ -26,13 +29,57 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
   if(fit.width/fit.height<ratio){const w=fit.height*ratio;fit.x-=(w-fit.width)/2;fit.width=w}
   else{const h=fit.width/ratio;fit.y-=(h-fit.height)/2;fit.height=h}
   const box=manual??fit,liveBox=useRef(box),liveDrag=useRef(drag)
-  useLayoutEffect(()=>{liveBox.current=box;liveDrag.current=drag},[box,drag])
+  const screenScale=Math.max(box.width/Math.max(1,canvasSize.width),box.height/Math.max(1,canvasSize.height))
+  useLayoutEffect(()=>{liveBox.current=box;liveDrag.current=drag;manualView.current=manual!==null},[box,drag,manual])
   useLayoutEffect(()=>{
     const node=svg.current;if(!node)return
-    const measure=()=>setRatio(node.clientWidth/Math.max(1,node.clientHeight))
+    let previous={width:0,height:0}
+    const measure=()=>{
+      const rect=node.getBoundingClientRect(),next={width:rect.width,height:rect.height}
+      if(next.width<=0||next.height<=0)return
+      if(previous.width&&previous.height&&manualView.current&&(next.width!==previous.width||next.height!==previous.height)){
+        const b=liveBox.current,scale=Math.max(b.width/previous.width,b.height/previous.height)
+        const width=next.width*scale,height=next.height*scale
+        const resized={x:b.x+(b.width-width)/2,y:b.y+(b.height-height)/2,width,height}
+        liveBox.current=resized;setManual(resized)
+      }
+      previous=next;setRatio(next.width/Math.max(1,next.height));setCanvasSize(next)
+    }
     measure();const observer=new ResizeObserver(measure);observer.observe(node)
     return()=>observer.disconnect()
   },[])
+  const edgePart=selectedEdge?.partId,edgeName=selectedEdge?.edge
+  useLayoutEffect(()=>{
+    if(!edgePart||!edgeName)return
+    let frame=0
+    const reveal=()=>{
+      cancelAnimationFrame(frame)
+      frame=requestAnimationFrame(()=>{
+        const node=svg.current,editor=document.querySelector('.sm-context')
+        if(!node||!editor)return
+        const line=[...node.querySelectorAll<SVGLineElement>('.sm-edge-hit')].find(l=>l.closest('[data-shape]')?.getAttribute('data-shape')===edgePart&&l.closest('[data-edge]')?.getAttribute('data-edge')===edgeName)
+        const matrix=line?.getScreenCTM();if(!line||!matrix)return
+        const q=new DOMPoint((line.x1.baseVal.value+line.x2.baseVal.value)/2,(line.y1.baseVal.value+line.y2.baseVal.value)/2).matrixTransform(matrix)
+        const r=node.getBoundingClientRect(),panel=editor.getBoundingClientRect(),v=window.visualViewport
+        // With a keyboard covering the lower page, reclaim the canvas above it before panning.
+        if(v&&v.height<innerHeight*.8&&r.top>v.offsetTop+v.height*.4){
+          const before=window.scrollY;window.scrollBy({top:r.top-v.offsetTop-12,behavior:'instant'})
+          if(window.scrollY!==before){reveal();return}
+        }
+        const left=Math.max(r.left,v?.offsetLeft??0)+30,top=Math.max(r.top,v?.offsetTop??0)+30
+        let right=Math.min(r.right,(v?.offsetLeft??0)+(v?.width??innerWidth))-30,bottom=Math.min(r.bottom,(v?.offsetTop??0)+(v?.height??innerHeight))-30
+        if(panel.top<bottom&&panel.bottom>top){if(panel.left>left+100)right=Math.min(right,panel.left-30);else bottom=Math.min(bottom,panel.top-30)}
+        if(right<=left||bottom<=top)return
+        const dx=q.x-Math.max(left,Math.min(right,q.x)),dy=q.y-Math.max(top,Math.min(bottom,q.y))
+        const rootMatrix=node.getScreenCTM();if(!rootMatrix)return
+        if(Math.abs(dx)>.5||Math.abs(dy)>.5){const b=liveBox.current,next={...b,x:b.x+dx/rootMatrix.a,y:b.y+dy/rootMatrix.a};liveBox.current=next;setManual(next)}
+      })
+    }
+    reveal();window.visualViewport?.addEventListener('resize',reveal);window.visualViewport?.addEventListener('scroll',reveal)
+    window.addEventListener('resize',reveal)
+    const observer=new ResizeObserver(reveal),editor=document.querySelector('.sm-context');if(editor)observer.observe(editor)
+    return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener('resize',reveal);window.visualViewport?.removeEventListener('resize',reveal);window.visualViewport?.removeEventListener('scroll',reveal)}
+  },[edgePart,edgeName])
   const center=()=>{
     const ps=[...pointers.current.values()]
     return{center:{x:ps.reduce((s,p)=>s+p.x,0)/ps.length,y:ps.reduce((s,p)=>s+p.y,0)/ps.length},distance:ps.length>1?Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y):0}
@@ -47,9 +94,23 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
     if(e.pointerType==='mouse'&&e.button!==0)return
     e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
     if(pointers.current.size===1){
-      const target=e.target as Element,partId=target.closest('[data-shape]')?.getAttribute('data-shape')??null
+      const target=e.target as Element,handle=!!target.closest('[data-move-handle]')
+      let partId=target.closest('[data-shape]')?.getAttribute('data-shape')??null
+      let edge=target.closest('[data-dimension]')?.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
+      if(!handle&&!edge){
+        const candidates:ScreenEdge[]=[]
+        // Resolve all nearby edges in screen space, independent of transparent stroke paint order.
+        e.currentTarget.querySelectorAll<SVGLineElement>('.sm-edge-hit').forEach(line=>{
+          const m=line.getScreenCTM();if(!m)return
+          const a=new DOMPoint(line.x1.baseVal.value,line.y1.baseVal.value).matrixTransform(m)
+          const b=new DOMPoint(line.x2.baseVal.value,line.y2.baseVal.value).matrixTransform(m)
+          candidates.push({partId:line.closest('[data-shape]')!.getAttribute('data-shape')!,edge:line.closest('[data-edge]')!.getAttribute('data-edge') as Edge,a,b})
+        })
+        const hit=nearestEdge({x:e.clientX,y:e.clientY},candidates)
+        if(hit){partId=hit.partId;edge=hit.edge}
+      }
       const item=layout.find(p=>p.shape.id===partId)
-      start.current={x:e.clientX,y:e.clientY,partId,edge:target.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null,position:item?{x:item.x,y:item.y}:null};moved.current=false
+      start.current={x:e.clientX,y:e.clientY,partId,edge,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
     }else{moved.current=true;start.current=null;liveDrag.current=null;setDrag(null)}
     reset()
   }
@@ -61,7 +122,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
     if(!moved.current)return
     const dx=(now.center.x-base.center.x)*base.scale,dy=(now.center.y-base.center.y)*base.scale
     if(pointers.current.size===1&&start.current?.partId){
-      if(moving!==start.current.partId||!start.current.position)return // Part drag never implicitly pans or measures.
+      if((!start.current.handle&&moving!==start.current.partId)||!start.current.position)return // Part drag never implicitly pans or measures.
       const position={x:Math.max(-10000,Math.min(10000,start.current.position.x+dx)),y:Math.max(-10000,Math.min(10000,start.current.position.y+dy))}
       setManual(base.box) // Freeze the view while moving; Fit All is explicit.
       const next={id:start.current.partId,position};liveDrag.current=next;setDrag(next);return
@@ -73,11 +134,12 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
   }
   const up=(e:PointerEvent<SVGSVGElement>)=>{
     pointers.current.delete(e.pointerId)
-    if(e.type==='pointercancel'){start.current=null;liveDrag.current=null;setDrag(null);moved.current=true}
+    if(e.type==='pointercancel'||e.type==='lostpointercapture'){start.current=null;liveDrag.current=null;setDrag(null);moved.current=true}
     else if(!pointers.current.size){
       if(liveDrag.current){onPlace(liveDrag.current.id,liveDrag.current.position);liveDrag.current=null;setDrag(null)}
       else if(!moved.current&&start.current?.partId){
-        if(moving===start.current.partId){/* Move mode owns the whole selected Part, including edges. */}
+        setManual(liveBox.current)
+        if(start.current.handle||moving===start.current.partId){/* Move mode owns the whole selected Part, including edges. */}
         else if(start.current.edge)onEdge({partId:start.current.partId,edge:start.current.edge})
         else onSelect(start.current.partId)
       }
@@ -88,7 +150,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
   const zoom=(factor:number)=>{const b=liveBox.current;setManual({x:b.x+b.width*(1-factor)/2,y:b.y+b.height*(1-factor)/2,width:b.width*factor,height:b.height*factor})}
   return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving}>
     <div className="sm-canvas-commandbar">{toolbar}<div className="sm-canvas-tools"><button onClick={()=>zoom(.8)} aria-label="Zoom in">＋</button><button onClick={()=>zoom(1.25)} aria-label="Zoom out">−</button><button onClick={()=>setManual(null)}>Fit All</button></div></div>
-    <svg ref={svg} className="sm-canvas" aria-label={area.name+' measurement worksheet'} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+    <svg ref={svg} className="sm-canvas" aria-label={area.name+' measurement worksheet'} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
       {layout.map(item=>{
         const {shape,points,local}=item,position=drag?.id===shape.id?drag.position:{x:item.x,y:item.y},g=calculate(shape)
         const sign=polygonArea(points)>0?1:-1
@@ -102,11 +164,11 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
             const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=sign*dy/len,ny=-sign*dx/len
             const offset=34,la={x:a.x+nx*offset,y:a.y+ny*offset},lb={x:b.x+nx*offset,y:b.y+ny*offset},mid={x:(la.x+lb.x)/2,y:(la.y+lb.y)/2}
             const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge,n=edgeLength(shape,edge,!!g.top)
-            return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active}>
+            return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active}>
               <line className="sm-edge-highlight" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
               {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
-              <rect className="sm-label-bg" x={mid.x-52} y={mid.y-15} width="104" height="30" rx="6"/>
+              <rect data-dimension="true" className="sm-label-bg" x={mid.x-52} y={mid.y-15} width="104" height="30" rx="6"/>
               <text className="sm-edge-value" x={mid.x} y={mid.y+6} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
               <line className="sm-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
             </g>
@@ -119,10 +181,14 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
               {rg.lines[0]?<text x={local(rg.lines[0].a).x+8} y={local(rg.lines[0].a).y+24}>{ref.kind==='sink'?'Sink Center':'Cooktop'}{value(ref.y)===null?' · Y unknown':value(ref.x)===null?' · X unknown':''}</text>:null}
             </g>
           }):null}
+          {selected===shape.id?<g data-move-handle="true" className="sm-move-handle" role="button" tabIndex={0} aria-label={'Drag '+shape.name} transform={'translate('+(item.width+30*screenScale)+' '+(-55*screenScale)+') scale('+screenScale+')'} onKeyDown={e=>{
+            const direction=({ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1}} as Record<string,Point>)[e.key]
+            if(direction){e.preventDefault();setManual(liveBox.current);const step=(e.shiftKey?40:10)*screenScale;onPlace(shape.id,{x:Math.max(-10000,Math.min(10000,item.x+direction.x*step)),y:Math.max(-10000,Math.min(10000,item.y+direction.y*step))})}
+          }}><title>Drag to move · arrow keys also work</title><rect x="-22" y="-22" width="44" height="44" rx="10"/><path d="M-12 0H12M0-12V12M-12 0l4-4M-12 0l4 4M12 0l-4-4M12 0l-4 4M0-12l-4 4M0-12l4 4M0 12l-4-4M0 12l4-4"/></g>:null}
         </g>
       })}
     </svg>
     {!layout.length?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
-    <p className="sm-canvas-hint">{moving?'MOVE PART · drag the selected geometry · Done moving to measure edges · blank space pans; two fingers zoom':'Tap inside a part to select · tap a line to measure · drag blank space to pan · pinch to zoom'}</p>
+    <p className="sm-canvas-hint">{moving?'MOVE PART · drag the selected geometry · Done moving to measure edges · blank space pans; two fingers zoom':'Tap inside a part · drag its arrow handle to move · tap a line to measure · drag blank space to pan · pinch to zoom'}</p>
   </div>
 }

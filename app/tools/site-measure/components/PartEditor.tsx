@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import QuantityField from './QuantityField'
 import { applyDefault, edgeOrder, newReference, quantity, requiredParams, setBasis, uid, value, type Edge, type FieldRecord, type Project, type Quantity, type Shape } from '../core/model'
 import { calculate, measurementRows } from '../core/geometry'
@@ -8,6 +8,30 @@ import { formatLength } from '../core/units'
 
 type Props = { project: Project; shape: Shape; edge: Edge | null; onChange: (recipe: (s: Shape) => void, group?: string) => void; onEnd: () => void; onClose: () => void; onRemove: () => void }
 export default function PartEditor({ project, shape, edge, onChange, onEnd, onClose, onRemove }: Props) {
+  const panel=useRef<HTMLElement>(null)
+  useLayoutEffect(()=>{
+    const node=panel.current;if(!node)return
+    const studio=node.closest<HTMLElement>('.sm-studio')
+    let frame=0
+    const size=()=>{
+      const v=window.visualViewport,top=v?.offsetTop??0,height=v?.height??innerHeight
+      studio?.style.setProperty('--sm-keyboard-space',height<innerHeight*.8?Math.max(0,innerHeight-height)+'px':'0px')
+      const mobile=innerWidth<=700
+      const canvas=document.querySelector('.sm-canvas-shell')?.getBoundingClientRect()
+      const y=mobile?top+Math.max(8,height-Math.min(460,height*.48)):top+Math.max(8,Math.min(canvas?.top??80,height-300))
+      node.style.top=y+'px';node.style.height=Math.max(100,Math.min(mobile?height*.48:650,top+height-y-8))+'px'
+      cancelAnimationFrame(frame)
+      frame=requestAnimationFrame(()=>{
+        const active=document.activeElement,body=node.querySelector<HTMLElement>('.sm-context-body')
+        if(!body||!(active instanceof HTMLInputElement||active instanceof HTMLTextAreaElement)||!body.contains(active))return
+        const field=active.getBoundingClientRect(),bounds=body.getBoundingClientRect()
+        if(field.bottom>bounds.bottom-10)body.scrollTop+=field.bottom-bounds.bottom+10
+        else if(field.top<bounds.top+10)body.scrollTop+=field.top-bounds.top-10
+      })
+    }
+    size();window.addEventListener('resize',size);window.addEventListener('scroll',size,{passive:true});window.visualViewport?.addEventListener('resize',size);window.visualViewport?.addEventListener('scroll',size)
+    return()=>{cancelAnimationFrame(frame);studio?.style.removeProperty('--sm-keyboard-space');window.removeEventListener('resize',size);window.removeEventListener('scroll',size);window.visualViewport?.removeEventListener('resize',size);window.visualViewport?.removeEventListener('scroll',size)}
+  },[])
   const [referencesOpen,setReferencesOpen]=useState(false)
   const control=edge?edgeControl(shape,edge):null,geometry=calculate(shape)
   const updateRecord=(id:string,recipe:(r:FieldRecord)=>void,group?:string)=>onChange(s=>{const r=s.fieldRecords.find(r=>r.id===id);if(r)recipe(r)},group)
@@ -20,23 +44,24 @@ export default function PartEditor({ project, shape, edge, onChange, onEnd, onCl
   const finished=edge?edgeLength(shape,edge):null
   const endEdges:Edge[]=control?.parameter==='width'?['left','right']:control?.parameter==='height'?['back','front']:control?.parameter==='legX'?['back','innerX']:['left','innerY']
   const baseValue=control?.parameter?value(shape.dimensions[control.parameter]):null
-  return <aside className="sm-context" aria-label="Measurement editor">
-    <header className="sm-context-heading"><div><span>{edge?'SELECTED EDGE':'PART'}</span><h2>{edge?edgeNames[edge]:shape.name}</h2><p>{edge?shape.name:partSize(shape,project.unit)}</p></div><button aria-label="Close editor" onClick={onClose}>×</button></header>
+  return <aside ref={panel} className="sm-context" aria-label="Measurement editor">
+    <header className="sm-context-heading"><div><span>{edge?'SELECTED EDGE':'PART'}</span><h2>{edge?edgeNames[edge]:shape.name}</h2><p>{edge?shape.name:partSize(shape,project.unit)}</p>{edge?<p className="sm-header-result">Finished: {formatLength(finished,project.unit)}</p>:null}</div><button className="sm-primary sm-editor-done" onClick={()=>{onEnd();onClose()}}>Done</button></header>
     <div className="sm-context-body">
       {edge&&control?<section className="sm-edge-editor">
         <p className="sm-measure-hint">{control.parameter?control.label+' · changes this part’s geometry.':'Calculated edge · record a separate reading to check it.'}</p>
         {control.parameter?<QuantityField key={shape.id+edge+shape.basis} id="sm-edge-measurement" autoFocus label={shape.basis==='cabinet'?'Cabinet measurement':'Finished measurement'} quantity={shape.dimensions[control.parameter]} unit={project.unit} onEnd={onEnd} onChange={q=>onChange(s=>{s.dimensions[control.parameter!]=q},shape.id+control.parameter)}/>:<div className="sm-derived"><strong>{formatLength(finished,project.unit)}</strong><p>{control.relationship}</p><p>Changing a reference reading will not change other measurements.</p></div>}
-        <div className="sm-finished"><span>Finished edge</span><strong>{formatLength(finished,project.unit)}</strong>{shape.basis==='cabinet'&&control.parameter?<small>{formatLength(baseValue,project.unit)} + {endEdges.map(e=>formatLength(value(shape.allowances[e]),project.unit)).join(' + ')} = {formatLength(finished,project.unit)}<br/>{endEdges.map(e=>edgeNames[e]+': '+formatLength(value(shape.allowances[e]),project.unit)).join(' · ')}</small>:null}</div>
-        <button className="sm-primary sm-done" onClick={()=>{onEnd();onClose()}}>Done</button>
-        <div className="sm-actions"><button onClick={()=>addRecord('measurement')}>＋ Reference measurement</button><button onClick={()=>addRecord('note')}>＋ Edge note</button></div>
-        {shape.basis==='cabinet'?<details className="sm-section-details"><summary>Overhangs{edgeOrder(shape).some(e=>value(shape.allowances[e])===null)?' · some unknown':''}</summary>
-          <p>Each allowance moves the named edge outward, changing its neighboring run lengths. Blank stays unknown.</p>
+        {shape.basis==='cabinet'?<section className="sm-selected-allowance" aria-label="Selected edge overhang">
+          <p>Moves this edge outward; changes neighboring run lengths. Blank stays unknown.</p>
           <QuantityField label={'Overhang on '+edgeNames[edge]} quantity={shape.allowances[edge]} unit={project.unit} allowance onEnd={onEnd} onChange={q=>allowance(edge,q)}/>
           <div className="sm-actions"><button onClick={()=>allowance(edge,quantity('0',project.unit,'allowance'))}>No overhang · 0</button><button onClick={()=>onChange(s=>Object.assign(s,applyDefault(s,edge,project,'end')))}>Use end default</button><button onClick={()=>onChange(s=>Object.assign(s,applyDefault(s,edge,project,'front')))}>Use front default</button></div>
-          <details><summary>All part allowances</summary>{edgeOrder(shape).filter(e=>e!==edge).map(e=><div key={e} className="sm-allowance-row"><QuantityField label={edgeNames[e]+' overhang'} quantity={shape.allowances[e]} unit={project.unit} allowance onEnd={onEnd} onChange={q=>allowance(e,q)}/><div className="sm-actions"><button onClick={()=>allowance(e,quantity('0',project.unit,'allowance'))}>0</button><button onClick={()=>onChange(s=>Object.assign(s,applyDefault(s,e,project,'end')))}>End default</button><button onClick={()=>onChange(s=>Object.assign(s,applyDefault(s,e,project,'front')))}>Front default</button></div></div>)}</details>
+        </section>:null}
+        <div className="sm-finished"><span>Finished edge</span><strong>{formatLength(finished,project.unit)}</strong>{shape.basis==='cabinet'&&control.parameter?<small>{formatLength(baseValue,project.unit)} + {endEdges.map(e=>formatLength(value(shape.allowances[e]),project.unit)).join(' + ')} = {formatLength(finished,project.unit)}<br/>{endEdges.map(e=>edgeNames[e]+': '+formatLength(value(shape.allowances[e]),project.unit)).join(' · ')}</small>:null}</div>
+        <div className="sm-actions"><button onClick={()=>addRecord('measurement')}>＋ Reference measurement</button><button onClick={()=>addRecord('note')}>＋ Edge note</button></div>
+        {shape.basis==='cabinet'?<section>
+          <details className="sm-section-details"><summary>Overhangs · all part allowances</summary>{edgeOrder(shape).filter(e=>e!==edge).map(e=><div key={e} className="sm-allowance-row"><QuantityField label={edgeNames[e]+' overhang'} quantity={shape.allowances[e]} unit={project.unit} allowance onEnd={onEnd} onChange={q=>allowance(e,q)}/><div className="sm-actions"><button onClick={()=>allowance(e,quantity('0',project.unit,'allowance'))}>0</button><button onClick={()=>onChange(s=>Object.assign(s,applyDefault(s,e,project,'end')))}>End default</button><button onClick={()=>onChange(s=>Object.assign(s,applyDefault(s,e,project,'front')))}>Front default</button></div></div>)}</details>
           <button className="sm-zero-all" onClick={()=>onChange(s=>{edgeOrder(s).forEach(e=>{if(!s.allowances[e].input.trim())s.allowances[e]=quantity('0',project.unit,'allowance')})})}>Set remaining blank overhangs to 0</button>
           <p>No door thickness is added.</p>
-        </details>:null}
+        </section>:null}
       </section>:<p className="sm-measure-hint">Tap a line on the worksheet to enter its measurement. Add notes and independent checks here.</p>}
       {records.length?<section className="sm-records-editor"><h3>{edge?'Measurements & notes on this edge':'Field measurements & notes'}</h3>{records.map(r=><div className="sm-record-card" key={r.id} data-record-editor={r.id}>
         <div className="sm-row"><span>{r.edge?edgeNames[r.edge]:'Part reference'} · {r.kind==='measurement'?'does not change geometry':'Note'}</span><button aria-label="Remove field record" onClick={()=>onChange(s=>{s.fieldRecords=s.fieldRecords.filter(x=>x.id!==r.id)})}>Remove</button></div>
