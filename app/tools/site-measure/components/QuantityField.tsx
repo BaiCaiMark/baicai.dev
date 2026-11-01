@@ -1,44 +1,50 @@
 'use client'
-import { useId } from 'react'
-import { originLabels, statusLabels, value, type Quantity } from '../core/model'
-import { numeric, parseLength, type Unit } from '../core/units'
+import { useEffect, useId, useRef, useState } from 'react'
+import { value, type Quantity } from '../core/model'
+import { numeric, type Unit } from '../core/units'
+import { parseFieldMeasurement } from '../core/worksheet'
 
-type Props = { label: string; quantity: Quantity; unit: Unit; allowance?: boolean; onChange: (q: Quantity) => void; onEnd: () => void; id?: string }
-export default function QuantityField({ label, quantity: q, unit, allowance, onChange, onEnd, id }: Props) {
-  const generated = useId(), fieldId = id ?? generated
-  const mm = value(q), activeUnit = mm === null && q.input.trim() ? q.unit : unit
-  const input = q.unit === activeUnit ? q.input : mm === null ? '' : numeric(mm, activeUnit)
-  const invalid = q.input.trim() !== '' && mm === null
+type Props = { label: string; quantity: Quantity; unit: Unit; allowance?: boolean; expression?: boolean; onChange: (q: Quantity) => void; onEnd: () => void; id?: string; autoFocus?: boolean }
+export default function QuantityField({ label, quantity: q, unit, allowance, expression, onChange, onEnd, id, autoFocus }: Props) {
+  const generated = useId(), fieldId = id ?? generated, inputRef = useRef<HTMLInputElement>(null)
+  const [focused, setFocused] = useState(false)
+  useEffect(() => {
+    if (!autoFocus) return
+    const frame=requestAnimationFrame(()=>{inputRef.current?.focus();inputRef.current?.select()})
+    return()=>cancelAnimationFrame(frame)
+  },[autoFocus])
+  const mm = value(q), activeUnit = expression || (mm === null && q.input.trim()) ? q.unit : unit
+  const input = expression || q.unit === activeUnit ? q.input : mm === null ? '' : numeric(mm, activeUnit)
+  const valid = expression ? parseFieldMeasurement(q).total !== null : mm !== null
   const change = (text: string) => onChange({ input: text, unit: activeUnit, origin: allowance ? 'allowance' : q.origin === 'assumed' ? 'assumed' : 'measured', status: 'unconfirmed' })
-  const fraction = (part: string) => {
-    if (!part) return
-    const current = parseLength(input, 'in')
-    const whole = current === null ? 0 : Math.floor(current / 25.4 + 1e-8)
-    change((whole ? whole + ' ' : '') + part)
-    onEnd()
+  const insert = (text: string) => {
+    const element = inputRef.current
+    const a = element?.selectionStart ?? input.length, b = element?.selectionEnd ?? a
+    change(input.slice(0,a) + text + input.slice(b)); element?.focus()
+    requestAnimationFrame(() => element?.setSelectionRange(a+text.length,a+text.length))
   }
   return <div className="sm-field">
     <label htmlFor={fieldId}>{label}</label>
     <div className="sm-input-line">
-      <input id={fieldId} data-quantity={label} type="text" inputMode="decimal" autoComplete="off" spellCheck={false}
-        value={input} placeholder="待量" aria-invalid={invalid} aria-describedby={fieldId + '-hint'}
-        onFocus={e => e.currentTarget.select()} onChange={e => change(e.target.value)} onBlur={onEnd}
-        onKeyDown={e => { if (e.key === 'Enter') {
-          e.preventDefault(); onEnd()
-          const fields = Array.from(e.currentTarget.closest('section')?.querySelectorAll<HTMLInputElement>('input[data-quantity]') ?? [])
-          const next = fields[fields.indexOf(e.currentTarget) + 1]; if (next) { next.focus(); next.scrollIntoView({ block: 'nearest' }) } else e.currentTarget.blur()
-        } }} />
+      <input ref={inputRef} id={fieldId} data-quantity={label} type="text" inputMode="decimal" autoComplete="off" spellCheck={false}
+        autoFocus={autoFocus} value={input} placeholder="Unknown" maxLength={80} aria-invalid={!!q.input.trim() && !valid}
+        onFocus={e => { setFocused(true); e.currentTarget.select() }} onChange={e => change(e.target.value)}
+        onBlur={() => { setFocused(false); onEnd() }} onKeyDown={e => { if (e.key === 'Enter') { onEnd(); e.currentTarget.blur() } }} />
       <span>{activeUnit === 'in' ? 'inch' : 'mm'}</span>
-      {activeUnit === 'in' ? <select aria-label={label + ' 分數'} value="" onChange={e => fraction(e.target.value)}>
-        <option value="">分數</option>
-        {Array.from({ length: 15 }, (_, i) => { let n = i + 1, d = 16; while (n % 2 === 0) { n /= 2; d /= 2 } return <option key={i} value={n + '/' + d}>{n}/{d}</option> })}
-      </select> : null}
     </div>
-    <div className="sm-field-meta" id={fieldId + '-hint'}>
-      {allowance ? <span className={invalid ? 'sm-error-text' : ''}>{invalid ? '格式無效' : mm === null ? '尚無數值' : originLabels[q.origin]}</span> : <select aria-label={label + ' 數值來源'} value={q.origin} onChange={e => { onChange({ ...q, origin: e.target.value as Quantity['origin'], status: 'unconfirmed' }); onEnd() }}><option value="measured">實測</option><option value="assumed">假設</option>{q.origin !== 'measured' && q.origin !== 'assumed' ? <option value={q.origin}>{originLabels[q.origin]}</option> : null}</select>}
-      <select aria-label={label + ' 確認狀態'} value={q.status} onChange={e => { onChange({ ...q, status: e.target.value as Quantity['status'] }); onEnd() }}>
-        {Object.entries(statusLabels).map(([key, text]) => <option key={key} value={key}>{text}</option>)}
-      </select>
-    </div>
+    {q.input.trim() && !valid ? <p className="sm-error-text">Use a positive number or fraction{expression ? '; + separates readings' : ''}.</p> : null}
+    {activeUnit === 'in' ? <div className="sm-entry-keys" data-active={focused} aria-hidden={!focused} aria-label="Fraction typing keys">
+      {[' ', '/', ...(expression ? [' + '] : [])].map(key => <button key={key} type="button" onPointerDown={e => e.preventDefault()} onClick={() => insert(key)}>{key === ' ' ? 'Space' : key}</button>)}
+      <span>e.g. 25 1/2</span>
+    </div> : null}
+    <details className="sm-quantity-details"><summary>{q.origin === 'assumed' ? 'Estimate' : q.status === 'verify' ? 'Needs Check' : 'Details'}</summary>
+      <p>{({measured:'Measured',assumed:'Estimate',default:'Project default',allowance:'Manual allowance'})[q.origin]} · {({confirmed:'Field checked',unconfirmed:'Not field checked',verify:'Needs Check'})[q.status]} — field status, not manufacturing approval.</p>
+      <div className="sm-actions">
+        {!allowance ? <button type="button" onClick={() => { onChange({...q,origin:q.origin==='assumed'?'measured':'assumed',status:'unconfirmed'});onEnd() }}>{q.origin==='assumed'?'Use measured':'Mark estimate'}</button> : null}
+        <button type="button" onClick={() => { onChange({...q,status:'verify'});onEnd() }}>Needs Check</button>
+        <button type="button" onClick={() => { onChange({...q,status:'confirmed'});onEnd() }}>Field checked</button>
+        <button type="button" onClick={() => { change('');onEnd() }}>Set unknown</button>
+      </div>
+    </details>
   </div>
 }

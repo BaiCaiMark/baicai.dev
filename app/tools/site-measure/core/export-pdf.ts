@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import { bounds, referenceGeometry, transformPoint, type Point, type Snapshot } from './geometry'
-import { edgeLabels, edgeOrder } from './model'
+import { edgeOrder } from './model'
 import { formatLength } from './units'
 
 export async function loadPdfFont(): Promise<Uint8Array> {
@@ -28,6 +28,7 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
     if (missing.length) throw new Error('PDF 字型不支援這些字元，請替換後重試：' + missing.slice(0, 12).join(' '))
   }
   let y = 0
+  let sectionTitle = snapshot.project.name
   const header = (title: string) => {
     pdf.setTextColor(24, 33, 31); pdf.setFontSize(15); pdf.text('Site Measure Studio', 14, 16)
     pdf.setFontSize(10)
@@ -42,7 +43,7 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
     pdf.setFontSize(10); pdf.setTextColor(...color)
     const lines = pdf.splitTextToSize(text || '—', 180) as string[]
     for (const line of lines) {
-      if (y > 274) next(snapshot.project.name + ' / continued 續頁')
+      if (y > 274) next(sectionTitle + ' / continued 續頁')
       pdf.text(line, 14, y); y += 5.5
     }
     y += 2
@@ -62,11 +63,12 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
   if (excluded.length) paragraph('DXF 將排除未完成輪廓：' + excluded.map(e => e.area.name + ' / ' + e.shape.name).join('；'), [160, 45, 35])
   for (const entry of snapshot.entries) {
     const { shape, area, geometry, rows } = entry
-    next(area.name + ' / ' + shape.name)
+    sectionTitle = area.name + ' / ' + shape.name
+    next(sectionTitle)
     const outline = geometry.top ?? (shape.basis === 'cabinet' ? geometry.base : null)
     if (outline) {
       const bb = bounds(outline.map(p => transformPoint(p, shape)))
-      const scale = Math.min(152 / Math.max(bb.width, 1), 82 / Math.max(bb.height, 1))
+      const scale = Math.min(152 / Math.max(bb.width, 1), 72 / Math.max(bb.height, 1))
       const ox = 105 - bb.width * scale / 2, oy = y + 12
       const view = (p: Point): Point => {
         const t = transformPoint(p, shape)
@@ -83,7 +85,8 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
       edgeOrder(shape).forEach((edge, i) => {
         const a = view(outline[i]), b = view(outline[(i + 1) % outline.length])
         pdf.setTextColor(30); pdf.setFontSize(9)
-        pdf.text(edgeLabels[edge].split(' ')[0], (a.x + b.x) / 2 + 2, (a.y + b.y) / 2 - 2)
+        const p=outline[i],q=outline[(i+1)%outline.length]
+        pdf.text(formatLength(Math.hypot(q.x-p.x,q.y-p.y),snapshot.project.unit), (a.x + b.x) / 2 + 2, (a.y + b.y) / 2 - 2)
       })
       if (geometry.top) {
         if (shape.rotation !== 0 || shape.mirrored) {
@@ -107,7 +110,8 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
     } else paragraph('尺寸未完成或無效，沒有生成輪廓。', [160, 45, 35])
     for (const error of geometry.errors) paragraph('未完成：' + error, [160, 45, 35])
     for (const row of rows) paragraph(row.label + ': ' + row.text)
-    if (geometry.warnings.length) paragraph('複核：' + geometry.warnings.join('；'), [135, 72, 19])
+    const templateWarnings=geometry.warnings.filter(w=>w.includes('90°'))
+    if (templateWarnings.length) paragraph('複核：' + templateWarnings.join('; '), [135, 72, 19])
     if (area.notes) paragraph('區域備註：' + area.notes)
     if (shape.notes) paragraph('形狀備註：' + shape.notes)
   }

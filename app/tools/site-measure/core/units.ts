@@ -22,5 +22,5 @@ export function numeric(mm: number, unit: Unit): string {
   return (mm / (unit === 'in' ? 25.4 : 1)).toFixed(6).replace(/\.?0+$/, '') || '0'
 }
 export function formatLength(mm: number | null, unit: Unit): string {
-  return mm === null ? '待量 / Unknown' : numeric(mm, unit) + (unit === 'in' ? '″' : ' mm')
+  return mm === null ? 'Unknown' : numeric(mm, unit) + (unit === 'in' ? '″' : ' mm')
 }

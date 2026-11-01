@@ -37,3 +37,11 @@
 - PDF 中文字型採自託管 Noto Sans TC（OFL），jsPDF 向量輸出；未支援字元明示失敗。DXF 使用閉合原生輪廓與分層參考。
 - 旋轉／鏡像保持 edge ID 與模板定位方向，輸出列出方向，避免把圖面左側與原模板左側混淆。
 - 詳細實作與驗證紀錄見 V0.1-IMPLEMENTATION.md。Android/Huawei、AutoCAD 及工廠驗收仍未通過實機驗收。
+
+## Preview 2 使用者評估後確認
+
+- 產品改以 measurement-first, geometry-assisted 為主：所有量測都可記錄，但不是每筆都要控制幾何。
+- 英文 UI、直接點邊、小型編輯器、多 Part 同區畫布；一般操作隱藏 W/H/A/B、E1–E6 與 metadata 下拉選單。
+- L-shape 衍生邊只能解釋關係或另記參考量測，不能偷偷改寫先前實測。Reference measurement 可含加總式，完全獨立於幾何約束。
+- 既有 unknown、來源、伸出量快照與匯出保護維持；舊 schema 1 經無損讀取遷移到 schema 2。
+- 零件排版與 part/edge note 為 worksheet 記錄，不代表現場座標或加工核准。詳見 PREVIEW-2.md。

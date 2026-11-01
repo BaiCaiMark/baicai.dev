@@ -19,6 +19,12 @@ export const referenceSchema = z.object({
   fromX: z.enum(['left', 'right']), fromY: z.enum(['back', 'front']),
   x: quantitySchema, y: quantitySchema,
 }).strict()
+const edgeSchema = z.enum(['back','right','front','left','innerX','innerY'])
+export const fieldRecordSchema = z.discriminatedUnion('kind', [
+  z.object({ id, edge: edgeSchema.nullable(), kind: z.literal('measurement'), label: z.string().max(160), measurement: quantitySchema }).strict(),
+  z.object({ id, edge: edgeSchema.nullable(), kind: z.literal('note'), text }).strict(),
+])
+export type FieldRecord = z.infer<typeof fieldRecordSchema>
 const dimensionsSchema = z.object({ width: quantitySchema, height: quantitySchema, legX: quantitySchema, legY: quantitySchema }).strict()
 export const shapeSchema = z.object({
   id, name: z.string().min(1).max(120), template: z.enum(['rectangle', 'l']),
@@ -32,29 +38,36 @@ export const shapeSchema = z.object({
   rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
   mirrored: z.boolean(), angleStatus: statusSchema, notes: text,
   references: z.array(referenceSchema).max(30),
+  fieldRecords: z.array(fieldRecordSchema).max(80).default([]),
+  layout: z.object({x:z.number().finite().min(-10000).max(10000),y:z.number().finite().min(-10000).max(10000)}).strict().optional(),
 }).strict()
-export const projectSchema = z.object({
-  schemaVersion: z.literal(1), id, name: z.string().min(1).max(120),
+const currentProjectSchema = z.object({
+  schemaVersion: z.literal(2), id, name: z.string().min(1).max(120),
   revision: z.number().int().min(0), updatedAt: z.string().datetime(), unit: z.enum(['in', 'mm']),
   defaults: z.object({ revision: z.number().int().min(0), end: quantitySchema, front: quantitySchema }).strict(),
   areas: z.array(z.object({
     id, name: z.string().min(1).max(120), notes: text, shapes: z.array(shapeSchema).max(60),
   }).strict()).min(1).max(30),
 }).strict().superRefine((p, ctx) => {
-  const ids = [p.id, ...p.areas.flatMap(a => [a.id, ...a.shapes.flatMap(s => [s.id, ...s.references.map(r => r.id)])])]
+  const ids = [p.id, ...p.areas.flatMap(a => [a.id, ...a.shapes.flatMap(s => [s.id, ...s.references.map(r => r.id), ...s.fieldRecords.map(r=>r.id)])])]
   if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', message: 'Duplicate identifiers / 重複識別碼' })
   if (p.areas.reduce((sum, a) => sum + a.shapes.length, 0) > 200) ctx.addIssue({ code: 'custom', message: 'Maximum 200 shapes / 最多 200 個形狀' })
 })
+// Parse into a new object; source v1 records/backups are never modified in place.
+export const projectSchema = z.preprocess(raw => {
+  if (raw && typeof raw === 'object' && 'schemaVersion' in raw && raw.schemaVersion === 1) return { ...raw, schemaVersion: 2 }
+  return raw
+}, currentProjectSchema)
 export type Project = z.infer<typeof projectSchema>
 export type Shape = z.infer<typeof shapeSchema>
 export type Reference = z.infer<typeof referenceSchema>
 export type Area = Project['areas'][number]
-export const paramLabels: Record<Param, string> = { width: '總長 W', height: '總深 H', legX: '橫腿深 A', legY: '直腿寬 B' }
-export const edgeLabels: Record<Edge, string> = { back: 'E1 後側 Back', right: 'E2 右端 Right', front: 'E3 前側 Front', left: 'E4 左側 Left', innerX: 'E5 內橫邊', innerY: 'E6 內直邊' }
+export const paramLabels: Record<Param, string> = { width: 'Back run length', height: 'Left run depth', legX: 'Right end depth', legY: 'Lower end width' }
+export const edgeLabels: Record<Edge, string> = { back: 'Back run', right: 'Right end', front: 'Front edge', left: 'Left back run', innerX: 'Inside horizontal run', innerY: 'Inside vertical run' }
 export const originLabels: Record<Quantity['origin'] | 'calculated', string> = {
-  measured: '實測', default: '專案預設', allowance: '手動伸出量', assumed: '假設', calculated: '計算',
+  measured: 'Measured', default: 'Project default', allowance: 'Manual allowance', assumed: 'Estimate', calculated: 'Calculated',
 }
-export const statusLabels: Record<Status, string> = { unconfirmed: '未確認', confirmed: '已確認', verify: '需複核' }
+export const statusLabels: Record<Status, string> = { unconfirmed: 'Not field checked', confirmed: 'Field checked', verify: 'Needs Check' }
 export function uid(): string { return crypto.randomUUID() }
 export function quantity(input = '', unit: Unit = 'in', origin: Quantity['origin'] = 'measured'): Quantity {
   return { input, unit, origin, status: 'unconfirmed' }
@@ -72,12 +85,12 @@ export function newShape(template: Shape['template'], unit: Unit, index = 1): Sh
       front: quantity('', unit, 'allowance'), left: quantity('', unit, 'allowance'),
       innerX: quantity('', unit, 'allowance'), innerY: quantity('', unit, 'allowance'),
     },
-    rotation: 0, mirrored: false, angleStatus: 'unconfirmed', notes: '', references: [],
+    rotation: 0, mirrored: false, angleStatus: 'unconfirmed', notes: '', references: [], fieldRecords: [],
   }
 }
 export function newProject(): Project {
   return {
-    schemaVersion: 1, id: uid(), name: '新量尺工程', revision: 0, updatedAt: new Date().toISOString(), unit: 'in',
+    schemaVersion: 2, id: uid(), name: 'New measurement project', revision: 0, updatedAt: new Date().toISOString(), unit: 'in',
     defaults: { revision: 0, end: quantity('1', 'in', 'allowance'), front: quantity('1.5', 'in', 'allowance') },
     areas: [{ id: uid(), name: 'Kitchen', notes: '', shapes: [] }],
   }
@@ -89,16 +102,16 @@ export function applyDefault(shape: Shape, edge: Edge, project: Project, kind: '
   return { ...shape, allowances: { ...shape.allowances, [edge]: { ...project.defaults[kind], origin: 'default', defaultRevision: project.defaults.revision } } }
 }
 export function parseBackup(raw: string): Project {
-  if (new TextEncoder().encode(raw).byteLength > 5_000_000) throw new Error('工程檔超過 5 MB')
+  if (new TextEncoder().encode(raw).byteLength > 5_000_000) throw new Error('Project backup exceeds 5 MB')
   let candidate: unknown
-  try { candidate = JSON.parse(raw) } catch { throw new Error('不是有效的 JSON 工程檔') }
+  try { candidate = JSON.parse(raw) } catch { throw new Error('Not a valid JSON project backup') }
   const parsed = projectSchema.safeParse(candidate)
-  if (!parsed.success) throw new Error('工程格式或版本不支援：' + parsed.error.issues[0].message)
+  if (!parsed.success) throw new Error('Unsupported project format or version: ' + parsed.error.issues[0].message)
   return parsed.data
 }
 export function importCopy(project: Project): Project {
   const p = structuredClone(project)
-  p.id = uid(); p.name = (p.name.slice(0, 110) + '（匯入）'); p.revision = 0; p.updatedAt = new Date().toISOString()
+  p.id = uid(); p.name = (p.name.slice(0, 105) + ' (imported)'); p.revision = 0; p.updatedAt = new Date().toISOString()
   return p
 }
 export function sampleProject(): Project {
@@ -117,6 +130,7 @@ export function sampleProject(): Project {
   const stove = newReference('cooktop', 'in'); stove.x = quantity('12'); small.references.push(stove)
   const bath2 = structuredClone(bath); bath2.id = uid(); bath2.name = 'Vanity 2'
   bath2.references = []; bath2.dimensions.width = quantity('47')
+
   p.areas = [
     { id: uid(), name: 'Kitchen', notes: '排版位置不代表現場相對距離', shapes: [small, l] },
     { id: uid(), name: 'Bathroom 1', notes: '', shapes: [bath] },
@@ -133,4 +147,15 @@ export function setBasis(shape: Shape, basis: Shape['basis']): void {
   shape.dimensions = shape.alternateDimensions
   shape.alternateDimensions = previous
   shape.basis = basis
+}
+
+export function worksheetSample(): Project {
+  const p = sampleProject(), kitchen = p.areas[0], l = kitchen.shapes[1]
+  p.name='Sample Kitchen & Vanities';kitchen.shapes[0].name='Stove Left';kitchen.notes='Visual arrangement only; not surveyed positions.'
+  const island = newShape('rectangle','in'); island.name='Island'; island.basis='finished'
+  island.dimensions.width=quantity('72');island.dimensions.height=quantity('36')
+  l.fieldRecords.push({id:uid(),edge:'innerX',kind:'measurement',label:'Cabinet check',measurement:quantity('12 + 24 3/4 + 1 1/2')})
+  l.fieldRecords.push({id:uid(),edge:'back',kind:'note',text:'Wall may be curved. Verify before fabrication.'})
+  kitchen.shapes=[l,kitchen.shapes[0],island]
+  return p
 }

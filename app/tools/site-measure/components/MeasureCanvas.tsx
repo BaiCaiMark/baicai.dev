@@ -1,150 +1,132 @@
 'use client'
 import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
-import { bounds, calculate, referenceGeometry, transformPoint, type Bounds, type Point } from '../core/geometry'
-import { edgeOrder, requiredParams, value, type Area, type Param, type Shape } from '../core/model'
+import { bounds, calculate, transformPoint, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
+import { edgeOrder, value, type Area, type Edge } from '../core/model'
+import { displayOutline, edgeNames, edgeLength, fieldMeasurementText, worksheetLayout } from '../core/worksheet'
 import { formatLength, type Unit } from '../core/units'
 
-type Props = { area: Area; selected: string | null; unit: Unit; onSelect: (id: string) => void; onDimension: (id: string, key: Param) => void }
-type Touch = { x: number; y: number }
-const path = (points: Point[]) => points.map((p, i) => (i ? 'L' : 'M') + p.x + ',' + p.y).join(' ') + ' Z'
-function arrangeShapes(shapes: Shape[]) {
-  let y = 600
-  const result = []
-  for (const shape of shapes) {
-    const g = calculate(shape), points = g.top ?? g.base
-    const bb = points ? bounds(points.map(p => transformPoint(p, shape))) : { x: 0, y: 0, width: 1000, height: 500 }
-    result.push({ shape, g, bb, x: 240 - bb.x, y: y - bb.y })
-    y += bb.height + 600
-  }
-  return result
-}
-export default function MeasureCanvas({ area, selected, unit, onSelect, onDimension }: Props) {
-  const svg = useRef<SVGSVGElement>(null)
-  const pointers = useRef(new Map<number, Touch>())
-  const gesture = useRef<{ center: Touch; distance: number; box: Bounds } | null>(null)
-  const start = useRef<{ x: number; y: number; shape: string | null; param: Param | null } | null>(null)
+export type EdgeSelection = { partId: string; edge: Edge }
+type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; unit: Unit; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onPlace: (id: string, position: Point) => void }
+type Touch = Point
+const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
+export default function MeasureCanvas({ area, selected, selectedEdge, unit, onSelect, onEdge, onPlace }: Props) {
+  const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
+  const pointers = useRef(new Map<number,Touch>())
+  const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number} | null>(null)
+  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;position:Point|null} | null>(null)
   const moved = useRef(false)
-  const [manual, setManual] = useState<Bounds | null>(null)
-  const layout = useMemo(() => arrangeShapes(area.shapes), [area.shapes])
-  const fitted = useMemo(() => {
-    if (!layout.length) return { x: 0, y: 0, width: 2200, height: 1500 }
-    const width = Math.max(...layout.map(i => i.bb.width)) + 600
-    const height = layout.reduce((a, i) => a + i.bb.height + 600, 600)
-    return { x: 0, y: 0, width, height }
-  }, [layout])
-  const liveBox = useRef(fitted)
-  const center = () => {
-    const touches = [...pointers.current.values()]
-    return {
-      center: { x: touches.reduce((s, p) => s + p.x, 0) / touches.length, y: touches.reduce((s, p) => s + p.y, 0) / touches.length },
-      distance: touches.length > 1 ? Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y) : 0,
+  const [manual,setManual]=useState<Bounds|null>(null),[ratio,setRatio]=useState(1.8)
+  const [arranging,setArranging]=useState(false),[drag,setDrag]=useState<{id:string;position:Point}|null>(null)
+  const layout=useMemo(()=>worksheetLayout(area.shapes),[area.shapes])
+  const fitted=useMemo(()=>{
+    if(!layout.length)return{x:0,y:0,width:1360,height:650}
+    const x=Math.min(...layout.map(p=>p.x))-30,y=Math.min(...layout.map(p=>p.y))-30
+    return{x,y,width:Math.max(...layout.map(p=>p.x+640))-x+30,height:Math.max(...layout.map(p=>p.y+490))-y+30}
+  },[layout])
+  const fit={...fitted}
+  if(fit.width/fit.height<ratio){const w=fit.height*ratio;fit.x-=(w-fit.width)/2;fit.width=w}
+  else{const h=fit.width/ratio;fit.y-=(h-fit.height)/2;fit.height=h}
+  const box=manual??fit,liveBox=useRef(box),liveDrag=useRef(drag)
+  useLayoutEffect(()=>{liveBox.current=box;liveDrag.current=drag},[box,drag])
+  useLayoutEffect(()=>{
+    const node=shell.current;if(!node)return
+    const measure=()=>setRatio(node.clientWidth/Math.max(1,node.clientHeight))
+    measure();const observer=new ResizeObserver(measure);observer.observe(node)
+    return()=>observer.disconnect()
+  },[])
+  const center=()=>{
+    const ps=[...pointers.current.values()]
+    return{center:{x:ps.reduce((s,p)=>s+p.x,0)/ps.length,y:ps.reduce((s,p)=>s+p.y,0)/ps.length},distance:ps.length>1?Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y):0}
+  }
+  const reset=()=>{
+    const matrix=svg.current?.getScreenCTM()
+    gesture.current=pointers.current.size?{...center(),box:liveBox.current,scale:matrix?1/matrix.a:1}:null
+  }
+  const down=(e:PointerEvent<SVGSVGElement>)=>{
+    if(e.pointerType==='mouse'&&e.button!==0)return
+    e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    if(pointers.current.size===1){
+      const target=e.target as Element,partId=target.closest('[data-shape]')?.getAttribute('data-shape')??null
+      const item=layout.find(p=>p.shape.id===partId)
+      start.current={x:e.clientX,y:e.clientY,partId,edge:target.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null,position:item?{x:item.x,y:item.y}:null};moved.current=false
+    }else{moved.current=true;liveDrag.current=null;setDrag(null)}
+    reset()
+  }
+  const move=(e:PointerEvent<SVGSVGElement>)=>{
+    if(!pointers.current.has(e.pointerId)||!gesture.current)return
+    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    const base=gesture.current,now=center()
+    if(start.current&&Math.hypot(e.clientX-start.current.x,e.clientY-start.current.y)>7)moved.current=true
+    if(!moved.current)return
+    const dx=(now.center.x-base.center.x)*base.scale,dy=(now.center.y-base.center.y)*base.scale
+    if(arranging&&pointers.current.size===1&&start.current?.partId&&start.current.position){
+      const position={x:Math.max(-10000,Math.min(10000,start.current.position.x+dx)),y:Math.max(-10000,Math.min(10000,start.current.position.y+dy))}
+      const next={id:start.current.partId,position};liveDrag.current=next;setDrag(next);return
     }
+    const factor=base.distance&&now.distance?Math.min(10,Math.max(.1,base.distance/now.distance)):1
+    const rect=e.currentTarget.getBoundingClientRect()
+    const ax=base.box.x+(base.center.x-rect.left)*base.scale,ay=base.box.y+(base.center.y-rect.top)*base.scale
+    const next={x:ax-(ax-base.box.x)*factor-dx*factor,y:ay-(ay-base.box.y)*factor-dy*factor,width:base.box.width*factor,height:base.box.height*factor}
+    liveBox.current=next;setManual(next)
   }
-  const resetGesture = () => { gesture.current = pointers.current.size ? { ...center(), box: liveBox.current } : null }
-  const down = (e: PointerEvent<SVGSVGElement>) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    e.currentTarget.setPointerCapture(e.pointerId)
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    if (pointers.current.size === 1) {
-      const target = e.target as Element
-      start.current = { x: e.clientX, y: e.clientY, shape: target.closest('[data-shape]')?.getAttribute('data-shape') ?? null, param: target.closest('[data-param]')?.getAttribute('data-param') as Param | null }
-      moved.current = false
-    } else moved.current = true
-    resetGesture()
-  }
-  const move = (e: PointerEvent<SVGSVGElement>) => {
-    if (!pointers.current.has(e.pointerId) || !gesture.current) return
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    const base = gesture.current, now = center(), rect = e.currentTarget.getBoundingClientRect()
-    if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 7) moved.current = true
-    const ratio = base.distance > 0 && now.distance > 0 ? base.distance / now.distance : 1
-    const width = Math.min(200_000, Math.max(100, base.box.width * ratio))
-    const factor = width / base.box.width, height = base.box.height * factor
-    // preserveAspectRatio=none gives an exact mapping; the viewBox is aspect-fitted below.
-    const anchorX = base.box.x + (base.center.x - rect.left) / rect.width * base.box.width
-    const anchorY = base.box.y + (base.center.y - rect.top) / rect.height * base.box.height
-    const next = { x: anchorX - (now.center.x - rect.left) / rect.width * width, y: anchorY - (now.center.y - rect.top) / rect.height * height, width, height }
-    liveBox.current = next; setManual(next)
-  }
-  const up = (e: PointerEvent<SVGSVGElement>) => {
+  const up=(e:PointerEvent<SVGSVGElement>)=>{
     pointers.current.delete(e.pointerId)
-    if (e.type !== 'pointercancel' && !moved.current && start.current?.shape) {
-      onSelect(start.current.shape)
-      if (start.current.param) onDimension(start.current.shape, start.current.param)
-    }
-    resetGesture()
+    if(e.type!=='pointercancel'){
+      if(liveDrag.current){onPlace(liveDrag.current.id,liveDrag.current.position);liveDrag.current=null;setDrag(null)}
+      else if(!moved.current&&start.current?.partId){
+        if(start.current.edge)onEdge({partId:start.current.partId,edge:start.current.edge})
+        else onSelect(start.current.partId)
+      }
+    }else{liveDrag.current=null;setDrag(null)}
+    reset()
   }
-  // SVG meet preserves true proportions. Client coordinates are converted with its inverse CTM.
-  // Fit viewBox uses the physical container ratio to avoid letterbox gesture drift.
-  const [ratio, setRatio] = useState(1.4)
-  const fit = { ...fitted }
-  if (fit.width / fit.height < ratio) { const w = fit.height * ratio; fit.x -= (w - fit.width) / 2; fit.width = w }
-  else { const h = fit.width / ratio; fit.y -= (h - fit.height) / 2; fit.height = h }
-  const effective = manual ?? fit
-  useLayoutEffect(() => { liveBox.current = effective }, [effective])
-  const zoom = (factor: number) => {
-    const b = liveBox.current, w = Math.min(200000, Math.max(100, b.width * factor)), h = b.height * w / b.width
-    setManual({ x: b.x + (b.width - w) / 2, y: b.y + (b.height - h) / 2, width: w, height: h })
-  }
-  const observer = useRef<ResizeObserver | null>(null)
-  return <div className="sm-canvas-shell" ref={node => {
-    observer.current?.disconnect()
-    if (node) { const measure = () => setRatio(node.clientWidth / Math.max(node.clientHeight, 1)); measure(); observer.current = new ResizeObserver(measure); observer.current.observe(node) }
-    return () => observer.current?.disconnect()
-  }}>
-    <div className="sm-canvas-tools">
-      <button type="button" onClick={() => zoom(0.8)} aria-label="放大">＋</button>
-      <button type="button" onClick={() => zoom(1.25)} aria-label="縮小">−</button>
-      <button type="button" onClick={() => setManual(null)}>Fit All</button>
-      <span>點尺寸編輯 · 拖空白平移 · 雙指縮放</span>
-    </div>
-    <svg ref={svg} className="sm-canvas" role="img" aria-label={area.name + ' 量尺畫布'} viewBox={effective.x + ' ' + effective.y + ' ' + effective.width + ' ' + effective.height}
-      onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
->
-      {layout.map(({ shape, g, bb, x, y }) => {
-        const toView = (p: Point) => { const t = transformPoint(p, shape); return { x: t.x + x, y: t.y + y } }
-        const labelSize = effective.width / 54
-        const title = { x: bb.x + x, y: bb.y + y - labelSize * 3 }
-        const originalW = value(shape.dimensions.width) ?? 1000, originalH = value(shape.dimensions.height) ?? 500
-        const anchors: Record<Param, Point> = {
-          width: { x: originalW / 2, y: -labelSize * 1.2 }, height: { x: originalW + labelSize * 1.2, y: originalH / 2 },
-          legX: { x: originalW + labelSize * 1.2, y: (value(shape.dimensions.legX) ?? 250) / 2 },
-          legY: { x: (value(shape.dimensions.legY) ?? 250) / 2, y: originalH + labelSize * 1.2 },
-        }
-        return <g key={shape.id} data-shape={shape.id} role="button" tabIndex={0} aria-label={'選取 ' + shape.name}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(shape.id) } }}>
-          <text x={title.x} y={title.y} fontSize={labelSize} className="sm-shape-title">{shape.name}{g.top ? '' : ' · 未完成'}</text>
-          {g.base && shape.basis === 'cabinet' ? <path d={path(g.base.map(toView))} className="sm-cabinet" /> : null}
-          {g.top ? <path d={path(g.top.map(toView))} className="sm-top" data-selected={selected === shape.id} /> : null}
-          {!g.top ? <text x={title.x} y={title.y + 75} fontSize={labelSize * 0.8} className="sm-placeholder">待量：{g.errors[0]}</text> : null}
-          {g.top ? edgeOrder(shape).map((edge, i) => {
-            const a = toView(g.top![i]), b = toView(g.top![(i + 1) % g.top!.length])
-            return <text key={edge} x={(a.x + b.x) / 2 + 10} y={(a.y + b.y) / 2 + labelSize} fontSize={labelSize * 0.65} className="sm-edge-label">{({back:'E1',right:'E2',front:'E3',left:'E4',innerX:'E5',innerY:'E6'})[edge]}</text>
-          }) : null}
-          {g.top && (shape.rotation !== 0 || shape.mirrored) ? (() => {
-            const o=toView({x:0,y:0}),a=toView({x:labelSize*2,y:0}),b=toView({x:0,y:labelSize*2})
-            return <g className="sm-reference"><line x1={o.x} y1={o.y} x2={a.x} y2={a.y}/><line x1={o.x} y1={o.y} x2={b.x} y2={b.y}/><text x={a.x+8} y={a.y+labelSize*.7} fontSize={labelSize*.7}>X+</text><text x={b.x+8} y={b.y+labelSize*.7} fontSize={labelSize*.7}>Y+</text></g>
-          })() : null}
-          {g.top ? shape.references.map(ref => {
-            const rg = referenceGeometry(ref, shape, g)
-            return <g key={ref.id} className="sm-reference">
-              {rg.lines.map((l, i) => { const a=toView(l.a),b=toView(l.b);return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} /> })}
-              {rg.point ? <circle cx={toView(rg.point).x} cy={toView(rg.point).y} r={labelSize / 5} /> : null}
-              {rg.lines[0] ? <text x={toView(rg.lines[0].a).x + 15} y={toView(rg.lines[0].a).y + labelSize} fontSize={labelSize * 0.65}>{ref.kind === 'sink' ? 'Sink' : 'Cooktop'}{value(ref.y) === null ? ' · Y 待量' : value(ref.x) === null ? ' · X 待量' : ''}</text> : null}
+  const zoom=(factor:number)=>{const b=liveBox.current;setManual({x:b.x+b.width*(1-factor)/2,y:b.y+b.height*(1-factor)/2,width:b.width*factor,height:b.height*factor})}
+  return <div className="sm-canvas-shell" ref={shell}>
+    <div className="sm-canvas-tools"><button onClick={()=>zoom(.8)} aria-label="Zoom in">＋</button><button onClick={()=>zoom(1.25)} aria-label="Zoom out">−</button><button onClick={()=>setManual(null)}>Fit All</button><button aria-pressed={arranging} onClick={()=>setArranging(!arranging)}>Arrange parts</button></div>
+    <svg ref={svg} className="sm-canvas" aria-label={area.name+' measurement worksheet'} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+      {layout.map(item=>{
+        const {shape}=item,position=drag?.id===shape.id?drag.position:{x:item.x,y:item.y}
+        const display=displayOutline(shape),rotated=display.points.map(p=>transformPoint(p,shape)),bb=bounds(rotated),g=calculate(shape)
+        const scale=Math.min(400/Math.max(bb.width,1),225/Math.max(bb.height,1))
+        const origin={x:320-bb.width*scale/2,y:105+(225-bb.height*scale)/2}
+        const local=(p:Point)=>{const t=transformPoint(p,shape);return{x:origin.x+(t.x-bb.x)*scale,y:origin.y+(t.y-bb.y)*scale}}
+        const points=display.points.map(local),sign=polygonArea(points)>0?1:-1
+        return <g key={shape.id} data-shape={shape.id} transform={'translate('+position.x+' '+position.y+')'}>
+          <rect className="sm-part-paper" data-selected={selected===shape.id} width="640" height="490" rx="12"/>
+          <text x="24" y="34" className="sm-part-title" role="button" tabIndex={0} aria-label={'Part '+shape.name} onKeyDown={e=>{if(e.key==='Enter')onSelect(shape.id)}}>{shape.name}</text>
+          <text x="24" y="60" className="sm-part-caption">{display.guide?'Template guide · incomplete · not to scale':shape.basis==='cabinet'?'Cabinet + applied overhangs':'Finished countertop measurements'}</text>
+          {shape.basis==='cabinet'&&g.base?<path className="sm-cabinet" d={path(g.base.map(local))}/>:null}
+          <path className={display.guide?'sm-template-guide':'sm-top'} data-selected={selected===shape.id} d={path(points)}/>
+          {display.guide?<text x="320" y="235" className="sm-guide-watermark" textAnchor="middle">MEASURE EDGES</text>:null}
+          {edgeOrder(shape).map((edge,i)=>{
+            const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=sign*dy/len,ny=-sign*dx/len
+            const offset=30,la={x:a.x+nx*offset,y:a.y+ny*offset},lb={x:b.x+nx*offset,y:b.y+ny*offset},mid={x:(la.x+lb.x)/2,y:(la.y+lb.y)/2}
+            const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge
+            const n=edgeLength(shape,edge,!!g.top)
+            return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active}>
+              <line className="sm-edge-highlight" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
+              <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
+              {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
+              <rect className="sm-label-bg" x={mid.x-58} y={mid.y-17} width="116" height="34" rx="6"/>
+              <text className="sm-edge-value" x={mid.x} y={mid.y+7} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
+              <line className="sm-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
             </g>
-          }) : null}
-          {g.base ? requiredParams(shape).map(key => {
-            const anchor = toView(anchors[key])
-            return <text key={key} x={anchor.x} y={anchor.y} fontSize={labelSize} data-param={key} role="button" tabIndex={0}
-              className="sm-dimension" aria-label={'編輯 ' + shape.name + ' ' + key} textAnchor="middle"
-              onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); onDimension(shape.id, key) } }}>
-              {({width:'W',height:'H',legX:'A',legY:'B'})[key]} {formatLength(value(shape.dimensions[key]), unit)}
-            </text>
-          }) : null}
+          })}
+          {g.top?shape.references.map(ref=>{
+            const rg=referenceGeometry(ref,shape,g)
+            return <g key={ref.id} className="sm-reference">
+              {rg.lines.map((l,i)=>{const a=local(l.a),b=local(l.b);return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>})}
+              {rg.point?<circle cx={local(rg.point).x} cy={local(rg.point).y} r="5"/>:null}
+              {rg.lines[0]?<text x={local(rg.lines[0].a).x+8} y={local(rg.lines[0].a).y+24}>{ref.kind==='sink'?'Sink Center':'Cooktop'}{value(ref.y)===null?' · Y unknown':value(ref.x)===null?' · X unknown':''}</text>:null}
+            </g>
+          }):null}
+          <text x="24" y="410" className="sm-part-records">{shape.notes?shape.notes.slice(0,66):'Tap an edge to enter a measurement'}</text>
+          {(shape.fieldRecords??[]).slice(0,2).map((r,i)=><text key={r.id} x="24" y={438+i*23} className="sm-field-record" data-record={r.id}>{(r.kind==='note'?'Note: '+r.text:(r.label||'Reference')+': '+fieldMeasurementText(r.measurement,unit)).slice(0,76)}</text>)}
+          {(shape.fieldRecords?.length??0)>2?<text x="580" y="480" className="sm-part-caption">+{shape.fieldRecords.length-2} more</text>:null}
         </g>
       })}
     </svg>
-    {!area.shapes.length ? <div className="sm-empty"><strong>從一塊檯面開始</strong><p>選 Rectangle 或 L-shape，再輸入量到的尺寸。</p></div> : null}
-    <div className="sm-canvas-legend">實線：成品 · 灰虛線：櫃體 · 藍線：定位參考<br />排版位置不代表現場距離 · 尺寸以數值為準</div>
+    {!layout.length?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
+    <p className="sm-canvas-hint">{arranging?'Drag a part to arrange the worksheet. Positions are not surveyed.':'Tap a line to measure · drag blank space to pan · pinch to zoom'}</p>
   </div>
 }

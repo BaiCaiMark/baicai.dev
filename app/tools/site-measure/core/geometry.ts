@@ -1,3 +1,4 @@
+import { fieldMeasurementText } from './field'
 import { edgeOrder, edgeLabels, originLabels, paramLabels, requiredParams, statusLabels, value, type Edge, type Shape, type Reference, type Project } from './model'
 import { formatLength, type Unit } from './units'
 
@@ -66,29 +67,29 @@ function solve(shape: Shape): Geometry {
   const params = requiredParams(shape)
   for (const key of params) {
     const n = value(shape.dimensions[key])
-    if (n === null || n <= 0) errors.push(paramLabels[key] + '：' + (shape.dimensions[key].input.trim() ? '請輸入有效正數' : '待量'))
+    if (n === null || n <= 0) errors.push(paramLabels[key] + '：' + (shape.dimensions[key].input.trim() ? 'Enter a valid positive measurement' : 'Unknown'))
     if (shape.dimensions[key].status !== 'confirmed') warnings.push(paramLabels[key] + ' ' + statusLabels[shape.dimensions[key].status])
   }
-  if (shape.angleStatus !== 'confirmed') warnings.push('90° 為模板假設；實際牆角' + statusLabels[shape.angleStatus])
-  else warnings.push('採用 90° 模板；幾何確認不代表加工核准')
+  if (shape.angleStatus !== 'confirmed') warnings.push('90° template assumption; actual wall angle: ' + statusLabels[shape.angleStatus])
+  else warnings.push('90° template adopted; field checked is not manufacturing approval')
   if (errors.length) return { base: null, top: null, errors, warnings }
   const w = value(shape.dimensions.width)!, h = value(shape.dimensions.height)!
   let base: Point[]
   if (shape.template === 'l') {
     const a = value(shape.dimensions.legX)!, b = value(shape.dimensions.legY)!
-    if (a >= h || b >= w) return { base: null, top: null, errors: ['L-shape 必須 A < H、B < W；不可退化為矩形或交叉'], warnings }
+    if (a >= h || b >= w) return { base: null, top: null, errors: ['L-shape end depths must be smaller than the overall runs; no degenerate or crossing outline'], warnings }
     base = [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: a }, { x: b, y: a }, { x: b, y: h }, { x: 0, y: h }]
   } else base = [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
   if (shape.basis === 'finished') return { base, top: base, errors, warnings }
   const offsets = edgeOrder(shape).map(e => {
     const q = shape.allowances[e], n = value(q)
-    if (n === null) errors.push(edgeLabels[e] + ' 伸出量' + (q.input.trim() ? '無效' : '待確認（無伸出請選 0）'))
-    if (q.status !== 'confirmed') warnings.push(edgeLabels[e] + ' 伸出量' + statusLabels[q.status])
+    if (n === null) errors.push(edgeLabels[e] + ' overhang ' + (q.input.trim() ? 'invalid' : 'unknown (choose 0 for no overhang)'))
+    if (q.status !== 'confirmed') warnings.push(edgeLabels[e] + ' overhang ' + statusLabels[q.status])
     return n ?? 0
   })
   if (errors.length) return { base, top: null, errors, warnings }
   const top = offsetOrthogonal(base, offsets)
-  if (!top) errors.push('伸出量造成邊反轉、退化或交叉；此組合不支援，請複核各邊')
+  if (!top) errors.push('Overhangs reverse an edge, collapse a run or cause crossing. Check this unsupported combination.')
   return { base, top, errors, warnings }
 }
 export function calculate(shape: Shape): Geometry {
@@ -99,7 +100,7 @@ export function calculate(shape: Shape): Geometry {
       const q = geometry.top![(i + 1) % geometry.top!.length], a = alternate.top![i], b = alternate.top![(i + 1) % alternate.top!.length]
       return Math.abs(Math.hypot(q.x - p.x, q.y - p.y) - Math.hypot(b.x - a.x, b.y - a.y)) > 1e-6
     })) {
-      geometry.errors.push('櫃體＋伸出量與另一組直接成品實測不一致；請切換模式複核，未解決前不輸出成品輪廓')
+      geometry.errors.push('Cabinet + overhang conflicts with the direct finished measurements. Check both input sets before exporting an outline.')
       geometry.top = null
     }
   }
@@ -141,31 +142,31 @@ function clipAxis(points: Point[], coordinate: number, axis: 'x' | 'y'): Segment
 }
 export function referenceGeometry(ref: Reference, shape: Shape, geometry: Geometry): { lines: Segment[]; point: Point | null; warnings: string[] } {
   const warnings: string[] = [], polygon = ref.basis === 'cabinet' ? (shape.basis === 'cabinet' ? geometry.base : null) : geometry.top
-  if (!polygon) return { lines: [], point: null, warnings: ['參考基準輪廓未完成'] }
+  if (!polygon) return { lines: [], point: null, warnings: ['Reference outline is incomplete'] }
   const bb = bounds(polygon), xValue = value(ref.x), yValue = value(ref.y)
   const x = xValue === null ? null : ref.fromX === 'left' ? bb.x + xValue : bb.x + bb.width - xValue
   const y = yValue === null ? null : ref.fromY === 'back' ? bb.y + yValue : bb.y + bb.height - yValue
-  if (x === null) warnings.push('X 待量或無效')
-  if (y === null) warnings.push('Y 待量或無效')
-  if (ref.x.status !== 'confirmed' || ref.y.status !== 'confirmed') warnings.push('定位尺寸尚有未確認項目')
+  if (x === null) warnings.push('X unknown or invalid')
+  if (y === null) warnings.push('Y unknown or invalid')
+  if (ref.x.status !== 'confirmed' || ref.y.status !== 'confirmed') warnings.push('Position measurements are not all field checked')
   let lines: Segment[] = []
   if (x !== null) lines = lines.concat(clipAxis(polygon, x, 'x'))
   if (y !== null) lines = lines.concat(clipAxis(polygon, y, 'y'))
   let point: Point | null = x !== null && y !== null ? { x, y } : null
-  if (point && !contains(polygon, point)) { warnings.push('定位點位於輪廓外／凹角內，請複核'); point = null }
-  if (x !== null && (x < bb.x - EPS || x > bb.x + bb.width + EPS)) warnings.push('X 超出參考輪廓')
-  if (y !== null && (y < bb.y - EPS || y > bb.y + bb.height + EPS)) warnings.push('Y 超出參考輪廓')
+  if (point && !contains(polygon, point)) { warnings.push('Reference point is outside the outline or inside the notch; Needs Check'); point = null }
+  if (x !== null && (x < bb.x - EPS || x > bb.x + bb.width + EPS)) warnings.push('X is outside the reference outline')
+  if (y !== null && (y < bb.y - EPS || y > bb.y + bb.height + EPS)) warnings.push('Y is outside the reference outline')
   return { lines, point, warnings }
 }
 export type ReportRow = { label: string; text: string }
 export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(shape)): ReportRow[] {
   const rows: ReportRow[] = requiredParams(shape).map(key => {
     const q = shape.dimensions[key]
-    return { label: (shape.basis === 'cabinet' ? 'Cabinet 櫃體 ' : 'Countertop 直接實測 ') + paramLabels[key], text: formatLength(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] }
+    return { label: (shape.basis === 'cabinet' ? 'Cabinet ' : 'Countertop directly measured ') + paramLabels[key], text: formatLength(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] }
   })
   for (const key of requiredParams(shape)) {
     const q = shape.alternateDimensions[key]
-    if (q.input.trim()) rows.push({ label: '保留另一組 ' + (shape.basis === 'cabinet' ? '成品直接實測 ' : '櫃體 ') + paramLabels[key], text: formatLength(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] })
+    if (q.input.trim()) rows.push({ label: 'Retained alternate ' + (shape.basis === 'cabinet' ? 'finished reading ' : 'cabinet ') + paramLabels[key], text: formatLength(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] })
   }
   if (shape.basis === 'cabinet') {
     for (const e of edgeOrder(shape)) {
@@ -177,24 +178,29 @@ export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(s
         const values = [value(shape.dimensions[key]), value(shape.allowances[a]), value(shape.allowances[b])]
         return values.map(n => formatLength(n, unit)).join(' + ') + ' = ' + formatLength(values.some(n => n === null) ? null : values.reduce<number>((s, n) => s + n!, 0), unit)
       }
-      rows.push({ label: '成品長 = Cabinet + Left + Right（計算）', text: result('width', 'left', 'right') })
-      rows.push({ label: '成品深 = Cabinet + Back + Front（計算）', text: result('height', 'back', 'front') })
+      rows.push({ label: 'Finished length = Cabinet + Left + Right (calculated)', text: result('width', 'left', 'right') })
+      rows.push({ label: 'Finished depth = Cabinet + Back + Front (calculated)', text: result('height', 'back', 'front') })
     }
   }
   if (geometry.top) {
     const bb = bounds(geometry.top)
-    rows.push({ label: shape.basis === 'cabinet' ? 'Countertop 成品外框（計算）' : 'Countertop 成品外框（直接實測）', text: formatLength(bb.width, unit) + ' × ' + formatLength(bb.height, unit) })
+    rows.push({ label: shape.basis === 'cabinet' ? 'Countertop finished size (calculated)' : 'Countertop finished size (directly measured)', text: formatLength(bb.width, unit) + ' × ' + formatLength(bb.height, unit) })
     if (shape.template === 'l') edgeOrder(shape).forEach((e, i) => {
       const a = geometry.top![i], b = geometry.top![(i + 1) % geometry.top!.length]
-      rows.push({ label: '成品 ' + edgeLabels[e], text: formatLength(Math.hypot(b.x - a.x, b.y - a.y), unit) + ' · 計算邊長' })
+      rows.push({ label: 'Finished ' + edgeLabels[e], text: formatLength(Math.hypot(b.x - a.x, b.y - a.y), unit) + ' · calculated edge length' })
     })
   }
-  rows.push({ label: '模板方向與定位軸', text: '旋轉 ' + shape.rotation + '° / 鏡像 ' + (shape.mirrored ? '是' : '否') + '；原模板 X 左→右、Y 後→前，方向隨圖變換' })
+  rows.push({ label: 'Template orientation & reference axes', text: 'Rotation ' + shape.rotation + '° / Mirror ' + (shape.mirrored ? 'Yes' : 'No') + '; original template X left→right, Y back→front; axes follow the drawing' })
   for (const ref of shape.references) {
-    const label = ref.kind === 'sink' ? 'Sink 水槽' : 'Cooktop 爐具'
-    rows.push({ label: label + ' · ' + (ref.basis === 'cabinet' ? 'Cabinet 基準' : 'Countertop 基準'), text: 'X ' + (ref.fromX === 'left' ? '從左' : '從右') + ' ' + formatLength(value(ref.x), unit) + ' / Y ' + (ref.fromY === 'back' ? '從後' : '從前') + ' ' + formatLength(value(ref.y), unit) + '（僅參考，非開孔）' })
-    rows.push({ label: label + ' 定位來源', text: 'X ' + originLabels[ref.x.origin] + ' / ' + statusLabels[ref.x.status] + ' · Y ' + originLabels[ref.y.origin] + ' / ' + statusLabels[ref.y.status] })
-    for (const warning of referenceGeometry(ref, shape, geometry).warnings) rows.push({ label: label + ' 待確認', text: warning })
+    const label = ref.kind === 'sink' ? 'Sink Center' : 'Cooktop'
+    rows.push({ label: label + ' · ' + (ref.basis === 'cabinet' ? 'Cabinet edges' : 'Countertop edges'), text: 'X ' + (ref.fromX === 'left' ? 'from left' : 'from right') + ' ' + formatLength(value(ref.x), unit) + ' / Y ' + (ref.fromY === 'back' ? 'from back' : 'from front') + ' ' + formatLength(value(ref.y), unit) + ' (reference only, not a cutout)' })
+    rows.push({ label: label + ' measurement source', text: 'X ' + originLabels[ref.x.origin] + ' / ' + statusLabels[ref.x.status] + ' · Y ' + originLabels[ref.y.origin] + ' / ' + statusLabels[ref.y.status] })
+    for (const warning of referenceGeometry(ref, shape, geometry).warnings) rows.push({ label: label + ' Needs Check', text: warning })
+  }
+  for (const record of shape.fieldRecords ?? []) {
+    const place = record.edge ? ({back:'Back run',right:'Right end',front:'Lower end',left:'Left back run',innerX:'Inside horizontal run',innerY:'Inside vertical run'})[record.edge] : 'Part'
+    if (record.kind === 'measurement') rows.push({label:'Reference measurement / ' + place + (record.label ? ' / ' + record.label : ''),text:fieldMeasurementText(record.measurement,unit) + ' · ' + originLabels[record.measurement.origin] + ' / ' + statusLabels[record.measurement.status]})
+    else rows.push({label:'Field note / ' + place,text:record.text})
   }
   return rows
 }

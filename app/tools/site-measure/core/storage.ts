@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import { projectSchema, type Project } from './model'
 export class SaveConflict extends Error {
-  constructor() { super('另一個分頁已更新此工程。請另存副本，或重新開啟已儲存版本。'); this.name = 'SaveConflict' }
+  constructor() { super('Another tab changed this project. Save a copy or reopen the saved project.'); this.name = 'SaveConflict' }
 }
 type Record = { id: string; version: number; updatedAt: string; project: Project }
 export class ProjectStore extends Dexie {
@@ -17,12 +17,12 @@ export class ProjectStore extends Dexie {
   }
   async load(id: string): Promise<{ project: Project; version: number }> {
     const row = await this.projects.get(id)
-    if (!row) throw new Error('工程不存在')
+    if (!row) throw new Error('Project not found')
     return { project: projectSchema.parse(row.project), version: row.version }
   }
   async previous(id: string): Promise<Project> {
     const row = await this.recovery.get(id)
-    if (!row) throw new Error('尚無上一份保存版本')
+    if (!row) throw new Error('No previous saved version yet')
     return projectSchema.parse(row.project)
   }
   async save(project: Project, expectedVersion: number | null): Promise<number> {

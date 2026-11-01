@@ -29,7 +29,7 @@ test('cabinet plus allowances and provenance', () => {
 })
 test('missing allowance does not become zero', () => {
   const s = sampleProject().areas[1].shapes[0]; s.allowances.back = quantity('')
-  const g = calculate(s); assert.equal(g.top, null); assert.ok(g.base); assert.match(g.errors.join(), /待確認/)
+  const g = calculate(s); assert.equal(g.top, null); assert.ok(g.base); assert.match(g.errors.join(), /unknown/)
 })
 test('blank or invalid dimension cannot produce an outline', () => {
   const s = sampleProject().areas[1].shapes[0]
@@ -94,7 +94,7 @@ for (const rotation of [0, 90, 180, 270] as const) for (const mirrored of [false
 test('sink X only creates reference line, no center point or Y', () => {
   const s = sampleProject().areas[1].shapes[0], g = calculate(s), r = referenceGeometry(s.references[0], s, g)
   assert.equal(r.point, null); assert.equal(r.lines[0].a.x, 762); assert.equal(r.lines[0].b.x, 762)
-  assert.match(r.warnings.join(), /Y 待量/)
+  assert.match(r.warnings.join(), /Y unknown/)
 })
 test('reference supports right/front direction and cabinet basis', () => {
   const s = sampleProject().areas[1].shapes[0], r = s.references[0]
@@ -105,7 +105,7 @@ test('reference supports right/front direction and cabinet basis', () => {
 test('reference out of outline does not fabricate a center', () => {
   const s=sampleProject().areas[0].shapes[1], r=sampleProject().areas[1].shapes[0].references[0]
   r.x=quantity('80');r.y=quantity('60')
-  const rg=referenceGeometry(r,s,calculate(s));assert.equal(rg.point,null);assert.match(rg.warnings.join(),/輪廓外/)
+  const rg=referenceGeometry(r,s,calculate(s));assert.equal(rg.point,null);assert.match(rg.warnings.join(),/outside/)
 })
 test('unit display does not mutate source or geometry', () => {
   const p=sampleProject(), before=JSON.stringify(p), s=p.areas[1].shapes[0], g=calculate(s).top
@@ -117,7 +117,7 @@ test('project backup validates and preserves original input and provenance', () 
   const imported=importCopy(p);assert.notEqual(imported.id,p.id);assert.equal(p.name,'示範工程 · Sample only')
 })
 test('import rejects malformed, future version, duplicate ids and excessive file', () => {
-  assert.throws(()=>parseBackup('{bad'));assert.throws(()=>parseBackup(JSON.stringify({...sampleProject(),schemaVersion:2})))
+  assert.throws(()=>parseBackup('{bad'));assert.throws(()=>parseBackup(JSON.stringify({...sampleProject(),schemaVersion:999})))
   const p=sampleProject();p.areas[0].id=p.id;assert.throws(()=>parseBackup(JSON.stringify(p)))
   assert.throws(()=>parseBackup(' '.repeat(5_000_001)))
 })
@@ -138,7 +138,7 @@ test('basis switching retains measurements and blocks contradictory finished geo
   const s=sampleProject().areas[1].shapes[0]
   setBasis(s,'finished');assert.equal(s.dimensions.width.input,'');assert.equal(s.alternateDimensions.width.input,'59')
   s.dimensions.width=quantity('61');s.dimensions.height=quantity('22.5')
-  assert.equal(calculate(s).top,null);assert.match(calculate(s).errors.join(),/不一致/)
+  assert.equal(calculate(s).top,null);assert.match(calculate(s).errors.join(),/conflicts/)
   s.dimensions.width=quantity('60');assert.ok(calculate(s).top)
   setBasis(s,'cabinet');assert.equal(s.dimensions.width.input,'59');assert.ok(calculate(s).top)
 })

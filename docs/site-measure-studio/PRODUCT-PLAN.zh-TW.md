@@ -216,3 +216,13 @@
 - 櫃體／直接成品模式各自保留實測輸入；完整尺寸矛盾會阻止成品輪廓輸出。
 - PDF 可保留不完整資訊；DXF 排除缺必要幾何的形狀，匯出前列明。參考線永不冒充開孔。
 - 完成情況、幾何假設、測試方式及待實機驗收項目見 [V0.1-IMPLEMENTATION.md](V0.1-IMPLEMENTATION.md)。歷史章節中的「尚未開發」為當時狀態，不代表目前實作狀態。
+
+## 15. Preview 2 — 現場量尺優先的畫布流程
+
+首次使用者評估指出表單、W/H/A/B 與逐欄 metadata 不直覺。使用者已授權在 feat/site-measure-v0.2-canvas 改為英文、直接點線的多零件 worksheet；不合併 main、不發布 production。
+
+- 同一 Area 顯示多個 Part，預設並排，可在明確的 Arrange parts 模式調整視覺排版；排版不是實測相對位置。
+- 實際邊與尺寸數值可點選，透過小型 contextual editor 輸入。L-shape 衍生邊不強制成為獨立約束。
+- 新增獨立 Reference measurement 與 part/edge note；量測記錄不必驅動幾何。額外數值與描述可保存、恢復並交付 PDF。
+- 移除主要介面的 metadata 與分數下拉選單，保留原始語義及分數輸入能力，以進階選項呈現 Estimate / Needs Check / Unknown 等狀態。
+- Schema 2 安全讀取舊 schema 1 工程；不得丟棄舊量測。細節、測試與限制見 [PREVIEW-2.md](PREVIEW-2.md)。

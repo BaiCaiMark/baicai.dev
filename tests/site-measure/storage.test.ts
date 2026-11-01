@@ -34,7 +34,7 @@ test('invalid schema cannot replace an existing project',async()=>{
   const db=new ProjectStore('test-'+crypto.randomUUID()),p=sampleProject()
   try {
     await db.save(p,null)
-    await assert.rejects(db.save({...p,schemaVersion:2} as never,1))
+    await assert.rejects(db.save({...p,schemaVersion:999} as never,1))
     assert.deepEqual((await db.load(p.id)).project,p)
   }finally{await db.delete()}
 })
