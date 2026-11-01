@@ -115,17 +115,17 @@ test('defaults snapshots, direct/cabinet basis and invalid L protect geometry',a
   await expect(page.locator('path.sm-top')).toHaveCount(2)
   await page.getByRole('button',{name:'Export',exact:true}).click();await expect(page.locator('.sm-export-panel')).toContainText('Excluded from DXF: Kitchen / Kitchen L')
 })
-test('explicit Arrange mode changes only worksheet positions; pan/zoom never alters data',async({page})=>{
+test('explicit Move mode changes only worksheet positions; pan/zoom never alters data',async({page})=>{
   await sample(page)
   const before=await backup(page,'p2-before-layout.json')
-  await page.getByRole('button',{name:'Arrange parts',exact:true}).click()
-  const card=page.locator('[data-shape]').first(),box=(await card.boundingBox())!
-  await page.mouse.move(box.x+35,box.y+25);await page.mouse.down();await page.mouse.move(box.x+85,box.y+45,{steps:8});await page.mouse.up()
+  await page.getByRole('toolbar',{name:'Selected part actions'}).getByRole('button',{name:'Move',exact:true}).click()
+  const point=await page.getByRole('button',{name:'Part Kitchen L',exact:true}).evaluate(el=>{const p=new DOMPoint(50,80).matrixTransform((el as SVGGraphicsElement).getScreenCTM()!);return{x:p.x,y:p.y}})
+  await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+50,point.y+20,{steps:8});await page.mouse.up()
   const after=await backup(page,'p2-after-layout.json')
   expect(after.areas[0].shapes[0].layout).toBeTruthy()
   expect(after.areas[0].shapes[0].dimensions).toEqual(before.areas[0].shapes[0].dimensions)
   await expect(page.locator('.sm-context')).toHaveCount(0)
-  await page.getByRole('button',{name:'Arrange parts',exact:true}).click()
+  await page.getByRole('toolbar',{name:'Selected part actions'}).getByRole('button',{name:'Done moving',exact:true}).click()
   await page.getByRole('button',{name:'Zoom in',exact:true}).click();await page.getByRole('button',{name:'Fit All',exact:true}).click()
   const final=await backup(page,'p2-after-zoom.json');expect(final.areas).toEqual(after.areas)
 })

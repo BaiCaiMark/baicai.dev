@@ -1,4 +1,4 @@
-import { bounds, calculate, type Point } from './geometry'
+import { bounds, calculate, transformPoint, type Point } from './geometry'
 import { edgeOrder, value, type Edge, type Param, type Shape } from './model'
 import { formatLength, type Unit } from './units'
 
@@ -34,11 +34,25 @@ export function edgeLength(shape: Shape, edge: Edge, finished = true): number | 
 }
 export { parseFieldMeasurement, fieldMeasurementText } from './field'
 // Worksheet coordinates are visual positions, never surveyed mm coordinates.
+// One fixed display scale for the whole Area; layout is never read by a solver/exporter.
+export const WORKSHEET_SCALE = .2
+export function worksheetPart(shape: Shape) {
+  const display = displayOutline(shape), rotated = display.points.map(p => transformPoint(p, shape)), box = bounds(rotated)
+  const local = (p: Point): Point => {
+    const t = transformPoint(p, shape)
+    return { x: (t.x - box.x) * WORKSHEET_SCALE, y: (t.y - box.y) * WORKSHEET_SCALE }
+  }
+  return { points: display.points.map(local), guide: display.guide, width: box.width * WORKSHEET_SCALE, height: box.height * WORKSHEET_SCALE, local }
+}
 export function worksheetLayout(shapes: Shape[]) {
+  const items = shapes.map(shape => ({ shape, ...worksheetPart(shape) }))
   const columns = shapes.length > 1 ? 2 : 1
-  return shapes.map((shape, index) => ({
-    shape, x: shape.layout?.x ?? (index % columns) * 680 + 30,
-    y: shape.layout?.y ?? Math.floor(index / columns) * 540 + 30,
+  const widths = Array.from({ length: columns }, (_, col) => Math.max(0, ...items.filter((_, i) => i % columns === col).map(p => p.width)))
+  const heights = Array.from({ length: Math.ceil(items.length / columns) }, (_, row) => Math.max(0, ...items.slice(row * columns, (row + 1) * columns).map(p => p.height)))
+  return items.map((item, i) => ({ ...item,
+    // Retain Preview 2 saved translations, without mutating or migrating source data.
+    x: item.shape.layout?.x ?? 100 + widths.slice(0, i % columns).reduce((n, w) => n + w + 200, 0),
+    y: item.shape.layout?.y ?? 110 + heights.slice(0, Math.floor(i / columns)).reduce((n, h) => n + h + 200, 0),
   }))
 }
 export function displayOutline(shape: Shape): { points: Point[]; guide: boolean } {

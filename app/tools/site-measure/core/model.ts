@@ -98,6 +98,17 @@ export function newProject(): Project {
 export function newReference(kind: Reference['kind'], unit: Unit): Reference {
   return { id: uid(), kind, basis: 'countertop', fromX: 'left', fromY: 'back', x: quantity('', unit), y: quantity('', unit) }
 }
+export function duplicateShape(source: Shape, existingNames: string[], position: { x: number; y: number }): Shape {
+  const copy = structuredClone(source)
+  copy.id = uid()
+  copy.references.forEach(r => { r.id = uid() })
+  copy.fieldRecords.forEach(r => { r.id = uid() })
+  let count = 1, name: string
+  do { name = source.name.slice(0, 100) + (count === 1 ? ' copy' : ' copy ' + count); count++ } while (existingNames.includes(name))
+  copy.name = name
+  copy.layout = { x: Math.max(-10000, Math.min(10000, position.x + 48)), y: Math.max(-10000, Math.min(10000, position.y + 48)) }
+  return copy
+}
 export function applyDefault(shape: Shape, edge: Edge, project: Project, kind: 'end' | 'front'): Shape {
   return { ...shape, allowances: { ...shape.allowances, [edge]: { ...project.defaults[kind], origin: 'default', defaultRevision: project.defaults.revision } } }
 }
@@ -157,5 +168,6 @@ export function worksheetSample(): Project {
   l.fieldRecords.push({id:uid(),edge:'innerX',kind:'measurement',label:'Cabinet check',measurement:quantity('12 + 24 3/4 + 1 1/2')})
   l.fieldRecords.push({id:uid(),edge:'back',kind:'note',text:'Wall may be curved. Verify before fabrication.'})
   kitchen.shapes=[l,kitchen.shapes[0],island]
+  l.layout={x:310,y:110};kitchen.shapes[1].layout={x:80,y:110};island.layout={x:560,y:390}
   return p
 }
