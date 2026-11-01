@@ -27,3 +27,13 @@
 - 更新提案不是自動升級。先評估 Bug 修復、效能、相容性與包體大小，再人工審核。
 - 不自動合併 main，不自動部署正式網站；同一維護策略可服務 A5 Converter 和未來的 Site Measure Studio。
 - **此時只是規劃紀錄，尚未啟用 Dependabot、Actions 或任何部署。**
+
+## 2026-10-31 開發授權後補記
+
+- 已授權 Phase 0 / Phase 1，在 feat/site-measure-v0.1 內開發與驗證；正式發布及啟用 Dependabot/Actions 仍須另行授權。
+- Project 預設＋Shape/Edge 覆寫正式採用，Area 層延後。實例保存值快照；全域修改不改舊圖。
+- 一般 Cabinet + Overhang 不自動加入門板厚度，也不要求門板量測。
+- 兩組完整尺寸若互相矛盾，保留輸入並阻止成品輪廓；未知與無伸出 0 分開。
+- PDF 中文字型採自託管 Noto Sans TC（OFL），jsPDF 向量輸出；未支援字元明示失敗。DXF 使用閉合原生輪廓與分層參考。
+- 旋轉／鏡像保持 edge ID 與模板定位方向，輸出列出方向，避免把圖面左側與原模板左側混淆。
+- 詳細實作與驗證紀錄見 V0.1-IMPLEMENTATION.md。Android/Huawei、AutoCAD 及工廠驗收仍未通過實機驗收。

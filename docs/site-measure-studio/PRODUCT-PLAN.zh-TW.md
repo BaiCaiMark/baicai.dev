@@ -205,3 +205,14 @@
 | --- | --- |
 | 2026-10-31（追加） | 使用者確認幾何是精確的；簡單 Job 可能跳過 AutoCAD，經 True Form Studio／ZOLITH Studio／Pegasus 處理。Sink 只需中心參考線，不在量尺工具繪製 cutout。 |
 | 2026-10-31（追加） | Auto-save、PDF Export 與 DXF Export 都是第一版核心，原始工程檔可編輯、可備份。 |
+
+## 14. 2026-10-31 V0.1 實作授權與落地
+
+使用者已明確授權 Phase 0 / Phase 1：在獨立功能分支實作、安裝必要依賴、測試、commit 與非正式 Preview；仍未授權合併 main、正式發布、production 設定變更或啟用維護自動化。
+
+- V0.1 使用 Project defaults + Shape/Edge overrides；不實作 Area 預設繼承。
+- Cabinet 指現場採用的櫃體基準，不自動加門板厚度；特殊施工細節寫入備註。
+- 採原生 SVG / Pointer Events、純函式幾何、Dexie 本機保存、jsPDF 與小型 DXF writer。原始資料與驗證流程由同一模型供畫面及輸出使用。
+- 櫃體／直接成品模式各自保留實測輸入；完整尺寸矛盾會阻止成品輪廓輸出。
+- PDF 可保留不完整資訊；DXF 排除缺必要幾何的形狀，匯出前列明。參考線永不冒充開孔。
+- 完成情況、幾何假設、測試方式及待實機驗收項目見 [V0.1-IMPLEMENTATION.md](V0.1-IMPLEMENTATION.md)。歷史章節中的「尚未開發」為當時狀態，不代表目前實作狀態。

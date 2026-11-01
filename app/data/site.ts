@@ -46,7 +46,18 @@ export const a5Tool = {
   icon: '/theme/icons/tools.svg',
 } satisfies ToolItem
 
-export const tools: ToolItem[] = [a5Tool]
+export const siteMeasureTool = {
+  name: 'Site Measure Studio',
+  slug: 'site-measure',
+  href: '/tools/site-measure',
+  description: 'Dimension-driven countertop field measurements, local projects, PDF and editable DXF export. Preview: verify measurements before fabrication.',
+  status: 'Draft',
+  category: 'Work',
+  shortLabel: 'SM',
+  icon: '/theme/icons/tools.svg',
+} satisfies ToolItem
+
+export const tools: ToolItem[] = [a5Tool, siteMeasureTool]
 export const activeTools = tools.filter((tool) => tool.status === 'Active' && tool.href)
 export const toolCategories: ToolCategory[] = ['Work', 'Church', 'Personal', 'Utility']
 
