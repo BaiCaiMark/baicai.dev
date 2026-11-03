@@ -46,7 +46,18 @@ export const a5Tool = {
   icon: '/theme/icons/tools.svg',
 } satisfies ToolItem
 
-export const tools: ToolItem[] = [a5Tool]
+export const cadViewerTool = {
+  name: 'Drawing Viewer',
+  slug: 'cad-viewer',
+  href: '/tools/cad-viewer',
+  description: 'Open DXF, DWG and PDF drawings on your phone or computer. Read-only and private.',
+  status: 'Active',
+  category: 'Work',
+  shortLabel: 'CAD',
+  icon: '/theme/icons/tools.svg',
+} satisfies ToolItem
+
+export const tools: ToolItem[] = [a5Tool, cadViewerTool]
 export const activeTools = tools.filter((tool) => tool.status === 'Active' && tool.href)
 export const toolCategories: ToolCategory[] = ['Work', 'Church', 'Personal', 'Utility']
 
