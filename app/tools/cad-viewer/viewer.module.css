@@ -40,6 +40,22 @@
 .statusDot { background: #3b9478; border-radius: 50%; height: 7px; width: 7px; margin-top: .35rem; flex-shrink: 0; }
 .error { color: #9c312d; background: #fff0ed; border: 1px solid #f1c9c4; border-radius: 10px; padding: .7rem .85rem; font-size: .85rem; margin-top: .55rem; overflow-wrap: anywhere; }
 .safetyNote { margin-top: .75rem; font-size: .76rem; line-height: 1.6; color: var(--muted); max-width: 980px; }
+.controls .activeTool { background: #d0eee3; border-color: #3f9279; color: #125542; }
+.measureOverlay { position: absolute; bottom: .75rem; left: .75rem; z-index: 2; background: #f8fbf7f0; color: #203d33; border: 1px solid #b7d8c9; box-shadow: 0 3px 16px #0003; border-radius: 12px; padding: .6rem .8rem; max-width: calc(100% - 1.5rem); pointer-events: none; display: flex; flex-direction: column; gap: .18rem; }
+.measureOverlay strong { font-size: .97rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.measureOverlay span { color: #536c63; font-size: .72rem; line-height: 1.35; }
+.fullscreenRoot { position: fixed; inset: 0; z-index: 9999; width: 100%; max-width: none; height: 100vh; height: 100dvh; background: #f4f6f4; display: flex; flex-direction: column; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
+.fullscreenRoot .heading, .fullscreenRoot .safetyNote { display: none; }
+.fullscreenRoot .toolbar { flex-shrink: 0; border: 0; border-radius: 0; box-shadow: 0 1px 4px #0001; min-height: 0; padding: .35rem .55rem; }
+.fullscreenRoot .fileDetails { display: none; }
+.fullscreenRoot .controls { width: 100%; justify-content: space-between; flex-wrap: nowrap; gap: .2rem; }
+.fullscreenRoot .controls button, .fullscreenRoot .pdfLink { min-height: 44px; white-space: nowrap; padding: .45rem .5rem; }
+.fullscreenRoot .status { display: none; }
+
+.fullscreenRoot .viewerFrame { flex: 1; height: auto; min-height: 0; border: 0; border-radius: 0; }
+.fullscreenRoot .status { flex-shrink: 0; padding: .35rem .7rem; min-height: 30px; }
+.fullscreenRoot .error { margin: 0; }
+
 @media (max-width: 740px) {
   .heading { align-items: flex-start; gap: 1rem; flex-direction: column; margin: 1rem 0; }
   .actions { width: 100%; }
