@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CadViewer } from '@cadview/core'
+import type { CadViewer, MeasureEvent } from '@cadview/core'
 import styles from './viewer.module.css'
 
 type DrawingFormat = 'DXF' | 'DWG' | 'PDF'
@@ -22,12 +22,33 @@ function humanSize(bytes: number) {
     : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// DXF $INSUNITS is the authoritative declared drawing unit; never assume
+// inches/mm when a file does not declare a recognised unit.
+function formatDistance(distance: number, insUnits: number) {
+  const mmPerUnit: Record<number, number> = {
+    1: 25.4, // inches
+    2: 304.8, // feet
+    4: 1, // mm
+    5: 10, // cm
+    6: 1000, // metres
+  }
+  const factor = mmPerUnit[insUnits]
+  if (!factor) return `${distance.toFixed(3)} drawing units (units unknown)`
+  const mm = distance * factor
+  return `${(mm / 25.4).toFixed(3)} in / ${mm.toFixed(2)} mm`
+}
+
 export default function DrawingViewer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const viewerRef = useRef<CadViewer | null>(null)
   const pdfUrlRef = useRef<string | null>(null)
+  const measureModeRef = useRef(false)
   const [busy, setBusy] = useState(false)
+  const [fullScreen, setFullScreen] = useState(false)
+  const [measuring, setMeasuring] = useState(false)
+  const [measurement, setMeasurement] = useState<MeasureEvent | null>(null)
+  const [insUnits, setInsUnits] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [name, setName] = useState('')
   const [format, setFormat] = useState<DrawingFormat | null>(null)
@@ -40,12 +61,72 @@ export default function DrawingViewer() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    // The upstream engine measures on pointerdown. A two-finger pinch would
+    // therefore wrongly count as two measurement taps. On touchscreens we
+    // intercept touch pointers and only measure a stationary SINGLE-finger tap
+    // on pointerup. Native touchmove handling still provides pan and pinch.
+    type Tap = { x: number; y: number; moved: boolean; multiTouch: boolean }
+    const pointers = new Map<number, Tap>()
+    const onDown = (event: PointerEvent) => {
+      if (!measureModeRef.current || event.pointerType !== 'touch') return
+      const tap: Tap = { x: event.clientX, y: event.clientY, moved: false, multiTouch: pointers.size > 0 }
+      if (pointers.size > 0) for (const other of pointers.values()) other.multiTouch = true
+      pointers.set(event.pointerId, tap)
+      event.stopImmediatePropagation()
+    }
+    const onMove = (event: PointerEvent) => {
+      const tap = pointers.get(event.pointerId)
+      if (tap && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 10) tap.moved = true
+    }
+    const onUp = (event: PointerEvent) => {
+      const tap = pointers.get(event.pointerId)
+      if (!tap) return
+      pointers.delete(event.pointerId)
+      if (!tap.moved && !tap.multiTouch && measureModeRef.current) {
+        const rect = canvas.getBoundingClientRect()
+        viewerRef.current?.handleClick(event.clientX - rect.left, event.clientY - rect.top)
+      }
+      event.stopImmediatePropagation()
+    }
+    const onCancel = (event: PointerEvent) => { pointers.delete(event.pointerId) }
+    canvas.addEventListener('pointerdown', onDown, true)
+    canvas.addEventListener('pointermove', onMove, true)
+    canvas.addEventListener('pointerup', onUp, true)
+    canvas.addEventListener('pointercancel', onCancel, true)
+
     return () => {
+      canvas.removeEventListener('pointerdown', onDown, true)
+      canvas.removeEventListener('pointermove', onMove, true)
+      canvas.removeEventListener('pointerup', onUp, true)
+      canvas.removeEventListener('pointercancel', onCancel, true)
       viewerRef.current?.destroy()
       viewerRef.current = null
       if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (!fullScreen) return
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const frame = requestAnimationFrame(() => {
+      viewerRef.current?.resize()
+      viewerRef.current?.fitToView()
+    })
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullScreen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = original
+      document.removeEventListener('keydown', onKeyDown)
+      cancelAnimationFrame(frame)
+      requestAnimationFrame(() => viewerRef.current?.resize())
+    }
+  }, [fullScreen])
 
   async function ensureViewer(): Promise<CadViewer> {
     if (viewerRef.current) return viewerRef.current
@@ -54,6 +135,7 @@ export default function DrawingViewer() {
     // Only fetch the DXF engine when a CAD drawing is opened; PDF stays native.
     const { CadViewer: Engine } = await import('@cadview/core')
     const viewer = new Engine(canvas, { theme, initialTool: 'pan' })
+    viewer.on('measure', result => setMeasurement(result))
     viewerRef.current = viewer
     return viewer
   }
@@ -67,6 +149,12 @@ export default function DrawingViewer() {
   const reset = useCallback(() => {
     releasePdf()
     viewerRef.current?.clearDocument()
+    viewerRef.current?.setTool('pan')
+    measureModeRef.current = false
+    setMeasuring(false)
+    setMeasurement(null)
+    setInsUnits(0)
+    setFullScreen(false)
     setName('')
     setFormat(null)
     setSize('')
@@ -87,6 +175,11 @@ export default function DrawingViewer() {
     setBusy(true)
     setError('')
     setShowLayers(false)
+    measureModeRef.current = false
+    setMeasuring(false)
+    setMeasurement(null)
+    setInsUnits(0)
+    viewerRef.current?.setTool('pan')
     setMessage(kind === 'DWG' ? 'Converting DWG locally on this device…' : 'Opening drawing…')
 
     try {
@@ -125,6 +218,7 @@ export default function DrawingViewer() {
         }
         viewer.resize()
         viewer.fitToView()
+        setInsUnits(viewer.getDocument()?.header.insUnits ?? 0)
         setLayers(viewer.getLayers().map(layer => ({
           name: layer.name,
           visible: !layer.isOff && !layer.isFrozen,
@@ -161,8 +255,16 @@ export default function DrawingViewer() {
     viewerRef.current?.setTheme(next)
   }
 
+  function toggleMeasure() {
+    const next = !measuring
+    measureModeRef.current = next
+    viewerRef.current?.setTool(next ? 'measure' : 'pan')
+    setMeasuring(next)
+    setMeasurement(null)
+  }
+
   return (
-    <div className={styles.root}>
+    <div className={`${styles.root} ${fullScreen ? styles.fullscreenRoot : ''}`}>
       <div className={styles.heading}>
         <div>
           <p className="eyebrow">Work / Drawing tools</p>
@@ -204,7 +306,10 @@ export default function DrawingViewer() {
         <div className={styles.controls}>
           {format && format !== 'PDF' && (
             <>
-              <button type="button" onClick={() => viewerRef.current?.fitToView()} disabled={busy}>Fit all</button>
+              <button type="button" onClick={() => viewerRef.current?.fitToView()} disabled={busy}>{fullScreen ? 'Fit' : 'Fit all'}</button>
+              <button type="button" className={measuring ? styles.activeTool : ''} aria-pressed={measuring} onClick={toggleMeasure} disabled={busy}>
+                {measuring ? '✓ Measure' : 'Measure'}
+              </button>
               <button
                 type="button"
                 aria-expanded={showLayers}
@@ -218,6 +323,11 @@ export default function DrawingViewer() {
           )}
           {format === 'PDF' && pdfUrl && (
             <a className={styles.pdfLink} href={pdfUrl} target="_blank" rel="noopener noreferrer">Open PDF ↗</a>
+          )}
+          {format && (
+            <button type="button" aria-pressed={fullScreen} onClick={() => setFullScreen(current => !current)} disabled={busy}>
+              {fullScreen ? 'Exit' : 'Full screen'}
+            </button>
           )}
         </div>
       </div>
@@ -248,6 +358,12 @@ export default function DrawingViewer() {
           </div>
         )}
         {busy && <div className={styles.busyOverlay} role="status">Processing on your device…</div>}
+        {format && format !== 'PDF' && measuring && (
+          <div className={styles.measureOverlay} role="status" aria-live="polite">
+            <strong>{measurement ? formatDistance(measurement.distance, insUnits) : 'Measure: tap two points'}</strong>
+            <span>{measurement ? 'Tap again to start a new measurement.' : 'Snap to corners for exact values. Drag to pan · pinch to zoom.'}</span>
+          </div>
+        )}
         {showLayers && format && format !== 'PDF' && (
           <aside className={styles.layerPanel} aria-label="Drawing layers">
             <div className={styles.layerHeader}>
