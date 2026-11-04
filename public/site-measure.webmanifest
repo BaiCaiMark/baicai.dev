@@ -1,0 +1,22 @@
+{
+  "name": "Site Measure Studio",
+  "short_name": "Site Measure",
+  "id": "/tools/site-measure",
+  "start_url": "/tools/site-measure",
+  "scope": "/tools/site-measure",
+  "display": "standalone",
+  "background_color": "#F7F8F6",
+  "theme_color": "#F7F8F6",
+  "icons": [
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

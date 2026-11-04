@@ -5,5 +5,6 @@ import './studio.css'
 export const metadata: Metadata = {
   ...pageMetadata('Site Measure Studio', 'Dimension-driven field measurements with local projects, PDF and DXF export.', '/tools/site-measure'),
   robots: { index: false, follow: false },
+  manifest: '/site-measure.webmanifest',
 }
 export default function SiteMeasurePage() { return <Studio /> }
