@@ -43,7 +43,7 @@ export default function QuickMeasurePanel({project,shape,edge,onChange,onEnd,onC
   const [custom,setCustom]=useState(false)
   const sides=edgeOrder(shape),selected=active??'front'
   const g=calculate(shape),w=value(shape.dimensions.width),h=value(shape.dimensions.height)
-  const rect=shape.template==='rectangle'
+  const rect=shape.template==='rectangle',step=shape.profile==='vanity-step'
   const chosen=treatmentOf(shape,selected)
   const allowance=shape.allowances[selected]
   const length=rect&&shape.basis==='cabinet'?formula(w,value(shape.allowances.left),value(shape.allowances.right),project.unit):null
@@ -62,8 +62,13 @@ export default function QuickMeasurePanel({project,shape,edge,onChange,onEnd,onC
     <header className="sm-context-heading"><div><span>QUICK MEASURE</span><h2>{shape.name}</h2><p>{ready&&bb?'Finished '+formatLength(bb.width,project.unit)+' × '+formatLength(bb.height,project.unit):'Finished · incomplete'}</p></div><button className="sm-primary sm-editor-done" onClick={()=>{onEnd();onClose()}}>Done</button></header>
     <div className="sm-context-body">
       <section className="sm-quick-dimensions"><div className="sm-quick-section-title"><strong>{shape.basis==='cabinet'?'Cabinet size':'Finished size'}</strong><span>{project.unit==='in'?'inch':'mm'}</span></div>
-        <div className="sm-quick-fields">{dim('width','Length')}{dim('height','Depth')}</div>
-        {!rect?<div className="sm-quick-fields">{dim('legX','Right end depth')}{dim('legY','Lower end width')}</div>:null}
+        <div className="sm-quick-fields">{dim('width',step?'Total length':'Length')}{dim('height',step?'Max depth':'Depth')}</div>
+        {!rect?<div className="sm-quick-fields">{dim('legX',step?'Shallow depth':'Right end depth')}{dim('legY',step?'Deep section width':'Lower end width')}</div>:null}
+        {step?<div className="sm-vanity-step-guide">
+          <p><strong>Stepped Vanity · Deep {shape.mirrored?'Right':'Left'}</strong> <span>· mirrored shape in the uploaded DXF</span></p>
+          <div className="sm-quick-choices"><button type="button" aria-pressed={!shape.mirrored} onClick={()=>{onChange(s=>{s.mirrored=false});onEnd()}}>Deep Left</button><button type="button" aria-pressed={shape.mirrored} onClick={()=>{onChange(s=>{s.mirrored=true});onEnd()}}>Deep Right</button></div>
+          <p>DXF silhouette example: 70″ total, 22.5″ max depth, 7″ shallow depth, 40″ deep section. <strong>Enter actual Cabinet measurements.</strong> Sink and edge treatment were not supplied.</p>
+        </div>:null}
       </section>
       <section className="sm-quick-edges">
         <div className="sm-quick-section-title"><strong>Edge treatment</strong><span>Tap an edge below or on the drawing</span></div>

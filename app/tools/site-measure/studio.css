@@ -114,3 +114,15 @@ html[data-theme="dark"] .sm-studio{--sm-bg:#172820;--sm-paper:#21372c;--sm-ink:#
 .sm-edge[data-treatment="polish"] .sm-edge-highlight{stroke:#118775;stroke-width:3}
 .sm-edge[data-treatment="miter"] .sm-edge-highlight{stroke:#c58b31;stroke-width:3;stroke-dasharray:7 3}
 .sm-edge[data-selected="true"] .sm-edge-highlight{stroke:#d49b32;stroke-width:5}
+
+/* Stepped bathroom vanity templates: both DXF mirror orientations, without adding a new solver. */
+.sm-template-picker{position:relative}.sm-template-picker>summary{list-style:none;white-space:nowrap}
+.sm-template-picker>summary::-webkit-details-marker{display:none}
+.sm-template-picker-options{position:absolute;z-index:30;right:0;top:52px;width:min(300px,88vw);display:grid;gap:7px;padding:12px;background:var(--sm-paper);border:1px solid var(--sm-line);border-radius:10px;box-shadow:0 8px 25px #15362928}
+.sm-template-picker-options p{font-size:12px;line-height:1.5;color:var(--sm-muted)}
+.sm-template-picker-options button{min-height:48px;text-align:left}
+.sm-vanity-step-guide{margin:10px 0 0;padding:10px;border:1px solid var(--sm-line);border-radius:8px;background:var(--sm-soft)}
+.sm-vanity-step-guide p{margin:0 0 6px!important;font-size:11px!important}
+.sm-vanity-step-guide span{color:var(--sm-muted)}
+.sm-vanity-step-guide .sm-quick-choices{margin:4px 0 9px}
+.sm-vanity-step-guide .sm-quick-choices button{min-height:44px}
