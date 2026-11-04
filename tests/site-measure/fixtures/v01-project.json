@@ -1,0 +1,494 @@
+{
+  "schemaVersion": 1,
+  "id": "c37110a8-c6d6-4ab4-a2a1-a1064ebcc454",
+  "name": "示範工程 · Sample only",
+  "revision": 0,
+  "updatedAt": "2026-11-01T04:08:30.034Z",
+  "unit": "in",
+  "defaults": {
+    "revision": 0,
+    "end": {
+      "input": "1",
+      "unit": "in",
+      "origin": "allowance",
+      "status": "unconfirmed"
+    },
+    "front": {
+      "input": "1.5",
+      "unit": "in",
+      "origin": "allowance",
+      "status": "unconfirmed"
+    }
+  },
+  "areas": [
+    {
+      "id": "59d5b672-ea22-4ad7-8e0c-21561f490482",
+      "name": "Kitchen",
+      "notes": "排版位置不代表現場相對距離",
+      "shapes": [
+        {
+          "id": "c4262ced-4986-4560-9506-36c51e22ce77",
+          "name": "Stove 左側",
+          "template": "rectangle",
+          "basis": "finished",
+          "dimensions": {
+            "width": {
+              "input": "24",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "height": {
+              "input": "25.5",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legX": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legY": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            }
+          },
+          "alternateDimensions": {
+            "width": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "height": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legX": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legY": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            }
+          },
+          "allowances": {
+            "back": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "right": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "front": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "left": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "innerX": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "innerY": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            }
+          },
+          "rotation": 0,
+          "mirrored": false,
+          "angleStatus": "unconfirmed",
+          "notes": "",
+          "references": [
+            {
+              "id": "6829d252-4c91-4361-a54c-10c851322bba",
+              "kind": "cooktop",
+              "basis": "countertop",
+              "fromX": "left",
+              "fromY": "back",
+              "x": {
+                "input": "12",
+                "unit": "in",
+                "origin": "measured",
+                "status": "unconfirmed"
+              },
+              "y": {
+                "input": "",
+                "unit": "in",
+                "origin": "measured",
+                "status": "unconfirmed"
+              }
+            }
+          ]
+        },
+        {
+          "id": "f1ba7168-142a-4f27-b9be-ad6057ae2278",
+          "name": "Kitchen L",
+          "template": "l",
+          "basis": "finished",
+          "dimensions": {
+            "width": {
+              "input": "96",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "height": {
+              "input": "72",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legX": {
+              "input": "25.5",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legY": {
+              "input": "25.5",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            }
+          },
+          "alternateDimensions": {
+            "width": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "height": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legX": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legY": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            }
+          },
+          "allowances": {
+            "back": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "right": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "front": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "left": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "innerX": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "innerY": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            }
+          },
+          "rotation": 0,
+          "mirrored": false,
+          "angleStatus": "unconfirmed",
+          "notes": "",
+          "references": []
+        }
+      ]
+    },
+    {
+      "id": "aaf18192-53ff-4cb2-81ea-8ee30a4932f1",
+      "name": "Bathroom 1",
+      "notes": "",
+      "shapes": [
+        {
+          "id": "668d6433-cbf8-4b68-8312-094f5b59cba6",
+          "name": "Vanity 59 + 1",
+          "template": "rectangle",
+          "basis": "cabinet",
+          "dimensions": {
+            "width": {
+              "input": "59",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "height": {
+              "input": "21",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legX": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legY": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            }
+          },
+          "alternateDimensions": {
+            "width": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "height": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legX": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legY": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            }
+          },
+          "allowances": {
+            "back": {
+              "input": "0",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "right": {
+              "input": "1",
+              "unit": "in",
+              "origin": "default",
+              "status": "unconfirmed",
+              "defaultRevision": 0
+            },
+            "front": {
+              "input": "1.5",
+              "unit": "in",
+              "origin": "default",
+              "status": "unconfirmed",
+              "defaultRevision": 0
+            },
+            "left": {
+              "input": "0",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "innerX": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "innerY": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            }
+          },
+          "rotation": 0,
+          "mirrored": false,
+          "angleStatus": "unconfirmed",
+          "notes": "櫃體不含門板；Front allowance 已含預留。Sink Y 待量。",
+          "references": [
+            {
+              "id": "8fea59c6-b5b3-472f-8b63-d7540a832ee8",
+              "kind": "sink",
+              "basis": "countertop",
+              "fromX": "left",
+              "fromY": "back",
+              "x": {
+                "input": "30",
+                "unit": "in",
+                "origin": "measured",
+                "status": "unconfirmed"
+              },
+              "y": {
+                "input": "",
+                "unit": "in",
+                "origin": "measured",
+                "status": "unconfirmed"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "3ffe5064-855f-4d08-a8d8-8e54ef40b202",
+      "name": "Bathroom 2",
+      "notes": "",
+      "shapes": [
+        {
+          "id": "b99404f9-d230-4de2-88d0-38a446327457",
+          "name": "Vanity 2",
+          "template": "rectangle",
+          "basis": "cabinet",
+          "dimensions": {
+            "width": {
+              "input": "47",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "height": {
+              "input": "21",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legX": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legY": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            }
+          },
+          "alternateDimensions": {
+            "width": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "height": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legX": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            },
+            "legY": {
+              "input": "",
+              "unit": "in",
+              "origin": "measured",
+              "status": "unconfirmed"
+            }
+          },
+          "allowances": {
+            "back": {
+              "input": "0",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "right": {
+              "input": "1",
+              "unit": "in",
+              "origin": "default",
+              "status": "unconfirmed",
+              "defaultRevision": 0
+            },
+            "front": {
+              "input": "1.5",
+              "unit": "in",
+              "origin": "default",
+              "status": "unconfirmed",
+              "defaultRevision": 0
+            },
+            "left": {
+              "input": "0",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "innerX": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            },
+            "innerY": {
+              "input": "",
+              "unit": "in",
+              "origin": "allowance",
+              "status": "unconfirmed"
+            }
+          },
+          "rotation": 0,
+          "mirrored": false,
+          "angleStatus": "unconfirmed",
+          "notes": "櫃體不含門板；Front allowance 已含預留。Sink Y 待量。",
+          "references": []
+        }
+      ]
+    }
+  ]
+}

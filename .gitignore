@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Site Measure local validation
+/.site-measure-tools/
+/artifacts/site-measure/
+/test-results/
+/playwright-report/

@@ -46,6 +46,17 @@ export const a5Tool = {
   icon: '/theme/icons/tools.svg',
 } satisfies ToolItem
 
+export const siteMeasureTool = {
+  name: 'Site Measure Studio',
+  slug: 'site-measure',
+  href: '/tools/site-measure',
+  description: 'Mobile-first countertop field measurement studio (Beta): quick edge treatments, local projects, PDF and DXF exports. Review dimensions before fabrication.',
+  status: 'Active',
+  category: 'Work',
+  shortLabel: 'SM',
+  icon: '/theme/icons/tools.svg',
+} satisfies ToolItem
+
 export const cadViewerTool = {
   name: 'Drawing Viewer',
   slug: 'cad-viewer',
@@ -57,7 +68,7 @@ export const cadViewerTool = {
   icon: '/theme/icons/tools.svg',
 } satisfies ToolItem
 
-export const tools: ToolItem[] = [a5Tool, cadViewerTool]
+export const tools: ToolItem[] = [a5Tool, siteMeasureTool, cadViewerTool]
 export const activeTools = tools.filter((tool) => tool.status === 'Active' && tool.href)
 export const toolCategories: ToolCategory[] = ['Work', 'Church', 'Personal', 'Utility']
 

@@ -1,0 +1,198 @@
+import { test, expect, chromium, type Page } from '@playwright/test'
+import fs from 'node:fs'
+import path from 'node:path'
+import DxfParser from 'dxf-parser'
+const root=path.resolve('artifacts/site-measure')
+async function sample(page:Page){
+  await page.goto('/tools/site-measure');await page.getByRole('button',{name:'Try sample Kitchen',exact:true}).click()
+  await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')
+}
+async function bathroom(page:Page){await page.getByRole('button',{name:/^Bathroom 1/}).click()}
+async function edge(page:Page,part:string,name:string){
+  const group=page.getByRole('button',{name:part+' '+name,exact:true})
+  await group.scrollIntoViewIfNeeded()
+  const p=await group.locator('.sm-edge-hit').evaluate(el=>{
+    const line=el as SVGLineElement
+    const point=new DOMPoint((line.x1.baseVal.value+line.x2.baseVal.value)/2,(line.y1.baseVal.value+line.y2.baseVal.value)/2).matrixTransform(line.getScreenCTM()!)
+    return{x:point.x,y:point.y}
+  })
+  await page.touchscreen.tap(p.x,p.y)
+  await expect(page.locator('.sm-quick-panel')).toBeVisible()
+  await page.getByRole('button',{name:/^More details/}).click()
+  await expect(page.locator('.sm-context-heading h2')).toHaveText(name)
+}
+const measurement=(p:Page)=>p.locator('#sm-edge-measurement')
+async function backup(page:Page,name:string){
+  const wait=page.waitForEvent('download');await page.getByRole('button',{name:'Backup',exact:true}).click()
+  await(await wait).saveAs(path.join(root,name))
+  return JSON.parse(fs.readFileSync(path.join(root,name),'utf8'))
+}
+async function openSaved(page:Page){await page.getByRole('button',{name:'Sample Kitchen & Vanities Open →',exact:true}).click()}
+test('tap actual lines → cabinet + overhangs → PDF/DXF → backup/import',async({page})=>{
+  const errors:string[]=[],uploads:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.postData()?.includes('FIELD-SAMPLE-SENTINEL'))uploads.push(r.url())})
+  await page.goto('/tools/site-measure');await page.getByRole('button',{name:'New project',exact:true}).click()
+  await page.getByRole('textbox',{name:'Project name',exact:true}).fill('Canvas field sample')
+  await page.getByRole('button',{name:'＋ Rectangle',exact:true}).click()
+  await expect(page.locator('.sm-template-guide')).toHaveCount(1);await expect(page.locator('path.sm-top')).toHaveCount(0)
+  await edge(page,'Rectangle 1','Back run');await expect(measurement(page)).toBeFocused();await measurement(page).fill('59');await page.getByRole('button',{name:'Done',exact:true}).click()
+  await edge(page,'Rectangle 1','Right end');await measurement(page).fill('21')
+  await page.locator('.sm-section-details').filter({has:page.locator('summary').filter({hasText:/^Overhangs/})}).first().locator('summary').first().click()
+  await page.getByRole('button',{name:'Set remaining blank overhangs to 0',exact:true}).click()
+  await page.getByRole('button',{name:'Use end default',exact:true}).click()
+  await page.getByRole('button',{name:'Done',exact:true}).click()
+  await edge(page,'Rectangle 1','Front edge')
+  await page.locator('summary').filter({hasText:/^Overhangs/}).click()
+  await page.getByRole('button',{name:'Use front default',exact:true}).click()
+  await expect(page.locator('.sm-finished')).toContainText('60″')
+  await page.getByRole('button',{name:'＋ Edge note',exact:true}).click()
+  await page.getByRole('textbox',{name:'Field note',exact:true}).fill('FIELD-SAMPLE-SENTINEL · 門板未裝')
+  await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')
+  const saved=await backup(page,'p2-roundtrip.json'),s=saved.areas[0].shapes[0]
+  expect(s.dimensions.width.input).toBe('59');expect(s.dimensions.height.input).toBe('21')
+  expect(s.allowances.right.origin).toBe('default');expect(s.allowances.front.input).toBe('1.5')
+  await page.getByRole('button',{name:'Export',exact:true}).click()
+  for(const kind of ['PDF','DXF']){
+    const wait=page.waitForEvent('download');await page.getByRole('button',{name:'Export '+kind,exact:true}).click();await(await wait).saveAs(path.join(root,'p2-browser.'+kind.toLowerCase()))
+  }
+  const dxf=new DxfParser().parseSync(fs.readFileSync(path.join(root,'p2-browser.dxf'),'utf8'))!
+  expect(dxf.header.$INSUNITS).toBe(4)
+  const top=dxf.entities.find(e=>e.type==='LWPOLYLINE'&&e.layer==='SM_TOP') as unknown as {vertices:{x:number;y:number}[]}
+  expect(Math.max(...top.vertices.map(p=>p.x))-Math.min(...top.vertices.map(p=>p.x))).toBeCloseTo(1524,6)
+  expect(Math.max(...top.vertices.map(p=>p.y))-Math.min(...top.vertices.map(p=>p.y))).toBeCloseTo(571.5,6)
+  await page.reload();await page.getByRole('button',{name:'Canvas field sample Open →',exact:true}).click()
+  await edge(page,'Rectangle 1','Back run');await expect(measurement(page)).toHaveValue('59')
+  await page.locator('input[type=file]').setInputFiles(path.join(root,'p2-roundtrip.json'))
+  await expect(page.getByLabel('Project name',{exact:true})).toHaveValue('Canvas field sample (imported)')
+  expect(errors).toEqual([]);expect(uploads).toEqual([])
+})
+test('multi-part worksheet, correct independent mapping, inline fractions, units and undo',async({page})=>{
+  await sample(page);await expect(page.locator('[data-shape]')).toHaveCount(3)
+  await expect(page.locator('.sm-context')).toHaveCount(0)
+  await edge(page,'Kitchen L','Right end');await expect(measurement(page)).toHaveValue('25.5')
+  await measurement(page).fill('26 1/2');await measurement(page).blur()
+  await expect(page.locator('.sm-finished')).toContainText('26.5″')
+  await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(measurement(page)).toHaveValue('25.5')
+  await page.getByRole('button',{name:'Redo',exact:true}).click();await expect(measurement(page)).toHaveValue('26 1/2')
+  await page.getByLabel('Display units',{exact:true}).selectOption('mm');await expect(measurement(page)).toHaveValue('673.1')
+  await page.getByLabel('Display units',{exact:true}).selectOption('in')
+  await page.getByRole('button',{name:'Done',exact:true}).click()
+  await edge(page,'Kitchen L','Front edge');await expect(measurement(page)).toHaveValue('25.5')
+  expect(await page.locator('.sm-canvas').textContent()).not.toMatch(/\b[WHAB]\s\d|\bE[1-6]\b/)
+})
+test('derived edge accepts independent checks and notes without changing existing dimensions',async({page})=>{
+  await sample(page)
+  const before=await backup(page,'p2-before-reference.json')
+  await edge(page,'Kitchen L','Inside horizontal run')
+  await expect(page.locator('#sm-edge-measurement')).toHaveCount(0);await expect(page.locator('.sm-derived')).toContainText('70.5″')
+  await page.getByRole('button',{name:'＋ Reference measurement',exact:true}).click()
+  await page.getByRole('textbox',{name:'Reference measurement',exact:true}).last().fill('12 + 24 3/4 + 1 1/2')
+  await expect(page.locator('.sm-reference-result').last()).toContainText('38.25″')
+  await page.getByRole('textbox',{name:'Reference description',exact:true}).last().fill('Independent cabinet check')
+  await page.getByRole('button',{name:'＋ Edge note',exact:true}).click()
+  await page.getByRole('textbox',{name:'Field note',exact:true}).fill('額外現場記錄 / No backsplash')
+  const after=await backup(page,'p2-after-reference.json')
+  expect(after.areas[0].shapes[0].dimensions).toEqual(before.areas[0].shapes[0].dimensions)
+  expect(after.areas[0].shapes[0].fieldRecords.some((r:{label?:string})=>r.label==='Independent cabinet check')).toBe(true)
+  await expect(page.locator('path.sm-top')).toHaveCount(3)
+})
+test('advanced status hidden by default and estimate provenance survives ordinary editing',async({page})=>{
+  await sample(page);await edge(page,'Kitchen L','Back run')
+  await expect(page.getByRole('button',{name:'Mark estimate',exact:true})).not.toBeVisible()
+  await page.locator('.sm-edge-editor > .sm-field .sm-quantity-details > summary').click()
+  await page.getByRole('button',{name:'Mark estimate',exact:true}).click()
+  await measurement(page).fill('97')
+  const p=await backup(page,'p2-estimate.json');expect(p.areas[0].shapes[0].dimensions.width.origin).toBe('assumed')
+})
+test('defaults snapshots, direct/cabinet basis and invalid L protect geometry',async({page})=>{
+  await sample(page);await bathroom(page)
+  await page.getByRole('button',{name:'Defaults',exact:true}).click()
+  await page.getByRole('textbox',{name:'Typical end overhang',exact:true}).fill('8')
+  await edge(page,'Vanity 59 + 1','Back run');await expect(page.locator('.sm-finished')).toContainText('60″')
+  await page.locator('.sm-section-details > summary').filter({hasText:'Part settings'}).click()
+  await page.getByRole('button',{name:'Direct finished size',exact:true}).click();await expect(measurement(page)).toHaveValue('')
+  await page.getByRole('button',{name:'Cabinet + overhang',exact:true}).click();await expect(measurement(page)).toHaveValue('59')
+  await page.getByRole('button',{name:'Done',exact:true}).click()
+  await page.getByRole('button',{name:/^Kitchen/}).click()
+  await edge(page,'Kitchen L','Right end');await measurement(page).fill('72')
+  await expect(page.locator('path.sm-top')).toHaveCount(2)
+  await page.getByRole('button',{name:'Export',exact:true}).click();await expect(page.locator('.sm-export-panel')).toContainText('Excluded from DXF: Kitchen / Kitchen L')
+})
+test('explicit Move mode changes only worksheet positions; pan/zoom never alters data',async({page})=>{
+  await sample(page)
+  const before=await backup(page,'p2-before-layout.json')
+  await page.getByRole('toolbar',{name:'Selected part actions'}).getByRole('button',{name:'Move',exact:true}).click()
+  const point=await page.getByRole('button',{name:'Part Kitchen L',exact:true}).evaluate(el=>{const p=new DOMPoint(50,80).matrixTransform((el as SVGGraphicsElement).getScreenCTM()!);return{x:p.x,y:p.y}})
+  await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+50,point.y+20,{steps:8});await page.mouse.up()
+  const after=await backup(page,'p2-after-layout.json')
+  expect(after.areas[0].shapes[0].layout).toBeTruthy()
+  expect(after.areas[0].shapes[0].dimensions).toEqual(before.areas[0].shapes[0].dimensions)
+  await expect(page.locator('.sm-context')).toHaveCount(0)
+  await page.getByRole('toolbar',{name:'Selected part actions'}).getByRole('button',{name:'Done moving',exact:true}).click()
+  await page.getByRole('button',{name:'Zoom in',exact:true}).click();await page.getByRole('button',{name:'Fit All',exact:true}).click()
+  const final=await backup(page,'p2-after-zoom.json');expect(final.areas).toEqual(after.areas)
+})
+test('two-finger touch pans/zooms without accidental edge edits',async({page,context})=>{
+  await sample(page);const svg=page.locator('svg.sm-canvas');await svg.scrollIntoViewIfNeeded();const b=(await svg.boundingBox())!,x=b.x+b.width/2,y=b.y+b.height/2,view=await svg.getAttribute('viewBox')
+  const cdp=await context.newCDPSession(page),touches=(d:number)=>[{x:x-d,y,id:0},{x:x+d,y,id:1}]
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:touches(40)})
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:touches(90)})
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+  await expect(svg).not.toHaveAttribute('viewBox',view!);await expect(page.locator('.sm-context')).toHaveCount(0)
+})
+test('legacy v0.1 import keeps measurements and new references save/reopen',async({page})=>{
+  await page.goto('/tools/site-measure')
+  await page.locator('input[type=file]').setInputFiles('tests/site-measure/fixtures/v01-project.json')
+  await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')
+  await bathroom(page);await edge(page,'Vanity 59 + 1','Back run');await expect(measurement(page)).toHaveValue('59')
+  await expect(page.locator('.sm-finished')).toContainText('60″')
+  await page.getByRole('button',{name:'＋ Reference measurement',exact:true}).click()
+  await page.getByRole('textbox',{name:'Reference measurement',exact:true}).fill('13 3/4')
+  await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')
+  await page.reload();await page.locator('.sm-recent button').first().click();await bathroom(page)
+  await edge(page,'Vanity 59 + 1','Back run');await expect(page.getByRole('textbox',{name:'Reference measurement',exact:true})).toHaveValue('13 3/4')
+})
+test('storage write failure retains drafts and backup and allows retry',async({page})=>{
+  await sample(page);await edge(page,'Kitchen L','Back run')
+  await page.evaluate(()=>{const original=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args:Parameters<IDBObjectStore['put']>){if(this.name==='projects')throw new DOMException('Test quota','QuotaExceededError');return original.apply(this,args)};window.addEventListener('sm-restore',()=>{IDBObjectStore.prototype.put=original},{once:true})})
+  await measurement(page).fill('101');await measurement(page).blur()
+  await expect(page.locator('.sm-save-state')).toHaveText('Not saved')
+  const p=await backup(page,'p2-failed-save.json');expect(p.areas[0].shapes[0].dimensions.width.input).toBe('101')
+  await page.evaluate(()=>window.dispatchEvent(new Event('sm-restore')));await page.getByRole('button',{name:'Retry save',exact:true}).click();await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')
+})
+test('multiple tabs cannot silently overwrite newer measurements',async({page,context})=>{
+  await sample(page);const other=await context.newPage();await other.goto('/tools/site-measure');await openSaved(other)
+  await edge(page,'Kitchen L','Back run');await edge(other,'Kitchen L','Back run')
+  await measurement(page).fill('98');await measurement(page).blur();await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')
+  await measurement(other).fill('103');await measurement(other).blur();await expect(other.locator('.sm-save-state')).toHaveText('Not saved')
+  await expect(other.locator('.sm-error')).toContainText('Another tab')
+  const p=await backup(other,'p2-conflict.json');expect(p.areas[0].shapes[0].dimensions.width.input).toBe('103')
+})
+test('sink X-only and notes remain available; invalid import cannot replace current project',async({page})=>{
+  await sample(page);await bathroom(page)
+  await expect(page.locator('.sm-reference circle')).toHaveCount(0);await expect(page.locator('.sm-reference line')).toHaveCount(1)
+  await page.locator('input[type=file]').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from('{"schemaVersion":99}')})
+  await expect(page.locator('.sm-error')).toContainText('Import failed');await expect(page.getByLabel('Project name',{exact:true})).toHaveValue('Sample Kitchen & Vanities')
+})
+test('complete Chrome close/reopen preserves worksheet and metadata',async()=>{
+  const profile=path.join(root,'p2-profile-'+crypto.randomUUID()),options={channel:'chrome',headless:true,viewport:{width:1280,height:900}}
+  let context=await chromium.launchPersistentContext(profile,options),page=await context.newPage()
+  await page.goto((process.env.SM_BASE_URL||'http://127.0.0.1:3012')+'/tools/site-measure');await page.getByRole('button',{name:'Try sample Kitchen',exact:true}).click();await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')
+  await context.close();context=await chromium.launchPersistentContext(profile,options);page=await context.newPage()
+  await page.goto((process.env.SM_BASE_URL||'http://127.0.0.1:3012')+'/tools/site-measure');await openSaved(page)
+  await expect(page.locator('[data-shape]')).toHaveCount(3);await edge(page,'Kitchen L','Inside horizontal run');await expect(page.locator('.sm-reference-result').last()).toContainText('38.25″')
+  await context.close()
+})
+test('English controls and responsive worksheets at tablet and phone sizes',async({page})=>{
+  await sample(page)
+  for(const [width,height] of [[1366,900],[1024,768],[768,1024],[390,844]]){
+    await page.setViewportSize({width,height});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+    await expect(page.locator('[data-shape]')).toHaveCount(3)
+    await page.screenshot({path:path.join(root,'p2-worksheet-'+width+'.png'),fullPage:true})
+  }
+})
+test('A5 outputs, unit helpers, fraction helper, reset and site navigation preserved',async({page})=>{
+  await page.goto('/tools/a5-bridge-saw')
+  for(const output of ['224.915','383.122','3219.45','1619.25','0.6875'])await expect(page.getByText(output,{exact:true})).toBeVisible()
+  await page.locator('#a5-x').fill('10');await page.getByRole('button',{name:'Reset defaults',exact:true}).click();await expect(page.locator('#a5-x')).toHaveValue('6.25')
+  await page.getByRole('link',{name:'Tools',exact:true}).first().click();await expect(page.getByRole('link',{name:'Site Measure Studio',exact:true})).toBeVisible()
+})

@@ -7,6 +7,9 @@ export default defineConfig([
   ...nextTypeScript,
   globalIgnores([
     '.next/**',
+    'artifacts/site-measure/**',
+    'test-results/**',
+    '.site-measure-tools/**',
     'out/**',
     'build/**',
     'baicai-brand-kit/**',

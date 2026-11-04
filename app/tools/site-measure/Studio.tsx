@@ -1,0 +1,208 @@
+'use client'
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type ChangeEvent } from 'react'
+import MeasureCanvas from './components/MeasureCanvas'
+import PartEditor from './components/PartEditor'
+import QuickMeasurePanel from './components/QuickMeasurePanel'
+import QuantityField from './components/QuantityField'
+import { calculate, exportSnapshot } from './core/geometry'
+import { historyReducer, initialHistory } from './core/history'
+import { applyRectangleQuickDefaults, duplicateShape, importCopy, newProject, newShape, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
+import { worksheetLayout } from './core/worksheet'
+import { ProjectStore } from './core/storage'
+import type { Unit } from './core/units'
+
+type SavedItem = { id: string; name: string; updatedAt: string }
+type Download = { url: string; name: string }
+function errorText(error: unknown) { return error instanceof Error ? error.message : String(error) }
+function filename(name: string) { return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').slice(0, 90) || 'measurement' }
+function blobDownload(data: BlobPart, type: string, name: string): Download {
+  const blob = new Blob([data], { type }), url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click()
+  return { url, name }
+}
+export default function Studio() {
+  const [history, dispatch] = useReducer(historyReducer, initialHistory)
+  const project = history.present
+  const [savedProject, setSavedProject] = useState<Project | null>(null)
+  const [ready, setReady] = useState(false), [projects, setProjects] = useState<SavedItem[]>([])
+  const [areaId, setAreaId] = useState<string | null>(null), [shapeId, setShapeId] = useState<string | null>(null)
+  const [saveState, setSaveState] = useState('No project open'), [error, setError] = useState('')
+  const [busy, setBusy] = useState(false), [download, setDownload] = useState<Download | null>(null)
+  const [panelOpen,setPanelOpen] = useState(false), [selectedEdge,setSelectedEdge] = useState<Edge | null>(null), [advanced,setAdvanced] = useState(false)
+  const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
+  const [exportOpen, setExportOpen] = useState(false), [defaultsOpen, setDefaultsOpen] = useState(false)
+  const db = useRef<ProjectStore | null>(null), versions = useRef(new Map<string, number>())
+  const latest = useRef(project), saved = useRef(new Map<string, Project>()), chain = useRef<Promise<unknown>>(Promise.resolve())
+  useLayoutEffect(() => { latest.current = project }, [project])
+  const importer = useRef<HTMLInputElement>(null)
+  const area = project?.areas.find(a => a.id === areaId) ?? project?.areas[0]
+  const shape = area?.shapes.find(s => s.id === shapeId)
+  const end = () => dispatch({ type: 'end' })
+  const edit = (recipe: (p: Project) => void, group?: string) => dispatch({ type: 'edit', recipe, group })
+  const editShape = (recipe: (s: Shape) => void, group?: string) => {
+    if (!area || !shape) return
+    edit(p => { const s = p.areas.find(a => a.id === area.id)?.shapes.find(s => s.id === shape.id); if (s) recipe(s) }, group)
+  }
+  useEffect(() => {
+    const store = new ProjectStore(); db.current = store
+    let active = true
+    store.list().then(items => { if (active) { setProjects(items); setReady(true) } }).catch(e => {
+      if (active) { setError('Local storage unavailable: ' + errorText(e) + '. Keep editing and download a backup.'); setReady(true) }
+    })
+    return () => { active = false; store.close(); db.current = null }
+  }, [])
+  const persist = useCallback((p: Project): Promise<boolean> => {
+    const job = chain.current.catch(() => undefined).then(async () => {
+      if (saved.current.get(p.id) === p) return true
+      try {
+        if (!db.current) throw new Error('Local database is not ready')
+        if (latest.current === p) setSaveState('Saving…')
+        const version = await db.current.save(p, versions.current.get(p.id) ?? null)
+        versions.current.set(p.id, version); saved.current.set(p.id, p)
+        if (latest.current === p) { setSaveState('Saved in this browser'); setSavedProject(p); setError('') }
+        setProjects(await db.current.list())
+        return true
+      } catch (e) {
+        if (latest.current?.id === p.id) { setSaveState('Not saved'); setError('Save failed: ' + errorText(e) + '. Your edits are still on screen. Download a backup.') }
+        return false
+      }
+    })
+    chain.current = job
+    return job
+  }, [])
+  useEffect(() => {
+    if (!project) return
+    const timer = setTimeout(() => { void persist(project) }, 450)
+    return () => clearTimeout(timer)
+  }, [project, persist])
+  useEffect(() => {
+    const flush = () => { if (latest.current) void persist(latest.current) }
+    const hidden = () => { if (document.visibilityState === 'hidden') flush() }
+    const leave = (event: BeforeUnloadEvent) => {
+      const p = latest.current
+      if (p && saved.current.get(p.id) !== p) { event.preventDefault(); event.returnValue = '' }
+    }
+    document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', flush); window.addEventListener('beforeunload', leave)
+    return () => { document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', flush); window.removeEventListener('beforeunload', leave) }
+  }, [persist])
+  useEffect(() => () => { if (download) URL.revokeObjectURL(download.url) }, [download])
+  const switchProject = async (p: Project, version?: number, forceCopy = false) => {
+    if (!forceCopy && latest.current && !(await persist(latest.current))) return
+    if (version !== undefined) { versions.current.set(p.id, version); saved.current.set(p.id, p) }
+    setAreaId(p.areas[0].id); setShapeId(p.areas[0].shapes[0]?.id ?? null)
+    setMoving(null);setDeleteTarget(null);setPartMessage('')
+    setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
+    setSavedProject(version === undefined ? null : p)
+    dispatch({ type: 'load', project: p })
+  }
+  const open = async (id: string) => {
+    try { if (latest.current && !(await persist(latest.current))) return; if (db.current) { const row = await db.current.load(id); await switchProject(row.project, row.version) } } catch (e) { setError(errorText(e)) }
+  }
+  const backup = () => {
+    if (!project) return
+    setDownload(blobDownload(JSON.stringify(project, null, 2), 'application/json', filename(project.name) + '.site-measure.json'))
+  }
+  const importFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    try {
+      if (file.size > 5_000_000) throw new Error('Project backup exceeds 5 MB')
+      await switchProject(importCopy(parseBackup(await file.text())))
+    } catch (e) { setError('Import failed: ' + errorText(e)) }
+  }
+  const exportFile = async (kind: 'pdf' | 'dxf') => {
+    if (!project || busy) return
+    setBusy(true); setError('')
+    const snapshot = exportSnapshot(project)
+    try {
+      if (kind === 'pdf') {
+        const adapter = await import('./core/export-pdf')
+        const bytes = adapter.createPdf(snapshot, await adapter.loadPdfFont())
+        setDownload(blobDownload(bytes.buffer as ArrayBuffer, 'application/pdf', filename(project.name) + '.pdf'))
+      } else {
+        const adapter = await import('./core/export-dxf'), result = adapter.createDxf(snapshot)
+        if (!result.included.length) throw new Error('No complete outlines to export. Fill in the required measurements and edge allowances.')
+        setDownload(blobDownload(result.text, 'application/dxf', filename(project.name) + '.dxf'))
+      }
+    } catch (e) { setError('Export failed: ' + errorText(e)) } finally { setBusy(false) }
+  }
+  const addShape = (template: Shape['template']) => {
+    if (!area || !project) return
+    if (area.shapes.length >= 60 || project.areas.reduce((n, a) => n + a.shapes.length, 0) >= 200) { setError('Limit: 60 parts per area, 200 per project'); return }
+    const s = newShape(template, project.unit, area.shapes.length + 1)
+    applyRectangleQuickDefaults(s,project)
+    const existing = worksheetLayout(area.shapes)
+    s.layout = {x:100,y:Math.min(10000,Math.max(-90,...existing.map(p=>p.y+p.height))+200)}
+    edit(p => { p.areas.find(a => a.id === area.id)!.shapes.push(s) }); setShapeId(s.id); setSelectedEdge(null); setPanelOpen(true);setAdvanced(false)
+    setMoving(null);setDeleteTarget(null);setPartMessage('')
+  }
+  const selectPart = (id:string,openEditor=false) => {end();setShapeId(id);setSelectedEdge(null);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
+  const duplicatePart = () => {
+    if(!shape||!area||!project)return
+    if(area.shapes.length>=60||project.areas.reduce((n,a)=>n+a.shapes.length,0)>=200){setError('Limit: 60 parts per area, 200 per project');return}
+    const item=worksheetLayout(area.shapes).find(p=>p.shape.id===shape.id)!
+    const copy=duplicateShape(shape,area.shapes.map(s=>s.name),item)
+    edit(p=>p.areas.find(a=>a.id===area.id)!.shapes.push(copy));selectPart(copy.id);setPartMessage('Duplicated '+shape.name+'. The copy has independent measurements.')
+  }
+  const removePart = () => {
+    if(!shape||!area||deleteTarget!==shape.id)return
+    edit(p=>{const a=p.areas.find(a=>a.id===area.id)!;a.shapes=a.shapes.filter(s=>s.id!==shape.id)})
+    setSelectedEdge(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null);setPartMessage('Deleted '+shape.name+'. Undo restores the part and its measurements.')
+  }
+  const all = project ? exportSnapshot(project) : null
+  const excluded = all?.entries.filter(e => !e.geometry.top) ?? []
+  const dirty = !!project && savedProject !== project
+  return <div className="sm-studio" data-active={!!project} lang="en">
+    <header className="sm-heading"><div><p className="sm-eyebrow">FIELD WORKSHEET · QUICK MEASURE BETA</p><h1>Site Measure Studio</h1></div><span className="sm-local-pill">Local projects · no account needed</span></header>
+    <div className="sm-toolbar">
+      <details className="sm-project-menu"><summary>Project</summary><div className="sm-project-popover">
+        <button disabled={!ready} onClick={()=>void switchProject(newProject())}>New project</button><button disabled={!ready} onClick={()=>void switchProject(worksheetSample())}>Open sample worksheet</button><button onClick={()=>importer.current?.click()}>Import backup as a copy</button>
+        <h2>Saved in this browser</h2>{projects.map(p=><button key={p.id} onClick={()=>void open(p.id)}>{p.name}<small>{new Date(p.updatedAt).toLocaleString()}</small></button>)}
+        {project?<button onClick={async()=>{try{const p=await db.current?.previous(project.id);if(p)await switchProject(importCopy(p))}catch(e){setError(errorText(e))}}}>Recover previous save as a copy</button>:null}
+      </div></details>
+      {project?<>
+        <input className="sm-project-name" aria-label="Project name" value={project.name} maxLength={120} onChange={e=>edit(p=>{p.name=e.target.value||'Untitled project'},'project-name')} onBlur={end}/>
+        <label className="sm-unit"><span>Units</span><select aria-label="Display units" value={project.unit} onChange={e=>edit(p=>{p.unit=e.target.value as Unit})}><option value="in">inch</option><option value="mm">mm</option></select></label>
+        <button onClick={()=>dispatch({type:'undo'})} disabled={!history.past.length} aria-label="Undo">↶</button><button onClick={()=>dispatch({type:'redo'})} disabled={!history.future.length} aria-label="Redo">↷</button>
+        <button onClick={backup}>Backup</button><button onClick={()=>setDefaultsOpen(!defaultsOpen)}>Defaults</button><button className="sm-primary" onClick={()=>setExportOpen(!exportOpen)}>Export</button>
+      </>:null}
+      <span className={'sm-save-state '+(saveState==='Not saved'?'sm-error-text':'')} role="status">{dirty&&saveState.startsWith('Saved')?'Saving changes…':saveState}</span>
+    </div>
+    <input ref={importer} type="file" accept=".json,.site-measure.json,application/json" hidden onChange={importFile}/>
+    {error?<div className="sm-error" role="alert"><p>{error}</p>{project?<div className="sm-actions"><button onClick={backup}>Download backup now</button><button onClick={()=>void persist(project)}>Retry save</button><button onClick={()=>void switchProject(importCopy(project),undefined,true)}>Save as a new copy</button></div>:null}<button aria-label="Dismiss message" onClick={()=>setError('')}>×</button></div>:null}
+    {download?<p className="sm-download" role="status">File ready. <a href={download.url} download={download.name}>Download {download.name}</a></p>:null}
+    {!project?<section className="sm-welcome"><span className="sm-welcome-mark" aria-hidden="true">⌜</span><h2>Measure the line. Keep the whole story.</h2><p>Add the countertop parts in a room, tap the edge you measured, and enter the number. Keep extra readings and notes without changing the drawing.</p><div className="sm-actions"><button className="sm-primary" disabled={!ready} onClick={()=>void switchProject(newProject())}>New project</button><button disabled={!ready} onClick={()=>void switchProject(worksheetSample())}>Try sample Kitchen</button><button onClick={()=>importer.current?.click()}>Import backup</button></div>
+      {projects.length?<div className="sm-recent"><h3>Continue a project</h3>{projects.slice(0,5).map(p=><button key={p.id} onClick={()=>void open(p.id)}>{p.name}<span>Open →</span></button>)}</div>:null}
+      <p className="sm-muted">Projects stay in this browser. Keep a portable backup. Preview and production use separate local storage.</p>
+    </section>:<>
+      {exportOpen?<section className="sm-export-panel"><div><h2>Export field worksheet</h2><p>PDF keeps all readings and notes. DXF includes only complete geometry. Review before fabrication.</p>{excluded.length?<p className="sm-error-text">Excluded from DXF: {excluded.map(e=>e.area.name+' / '+e.shape.name).join(', ')}</p>:null}</div><div className="sm-actions"><button disabled={busy} onClick={()=>void exportFile('pdf')}>{busy?'Working…':'Export PDF'}</button><button disabled={busy||!all?.entries.some(e=>e.geometry.top)} onClick={()=>void exportFile('dxf')}>Export DXF</button></div></section>:null}
+      {defaultsOpen?<section className="sm-defaults"><div><h2>Project overhang defaults</h2><p>Apply only to a named edge. Changing these values does not change existing parts.</p></div>{(['end','front'] as const).map(key=><QuantityField key={key} label={key==='end'?'Typical end overhang':'Typical front overhang'} quantity={project.defaults[key]} unit={project.unit} allowance onEnd={end} onChange={q=>edit(p=>{p.defaults[key]=q;p.defaults.revision++},'default-'+key)}/>)}</section>:null}
+      <div className="sm-area-bar"><div className="sm-area-tabs" aria-label="Areas">{project.areas.map(a=><button key={a.id} aria-pressed={area?.id===a.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'')}}>{a.name}<span>{a.shapes.length} parts</span></button>)}</div><button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}>＋ Area</button></div>
+      {area?<>
+        <div className="sm-area-heading"><details className="sm-area-settings"><summary>{area.name} <span>▾</span></summary><div><label>Area name<input aria-label="Area name" maxLength={120} value={area.name} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.name=e.target.value||'Unnamed area'},'area-name')} onBlur={end}/></label><label>Area notes<textarea aria-label="Area notes" maxLength={4000} value={area.notes} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.notes=e.target.value},'area-notes')} onBlur={end}/></label></div></details>
+          <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button></div></div>
+        <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
+          <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} unit={project.unit} moving={moving===shape?.id?moving:null}
+            toolbar={shape?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
+              <strong title={shape.name}>{shape.name}</strong>
+              {deleteTarget===shape.id?<><span>Delete this part?</span><button className="sm-danger" onClick={removePart}>Delete part</button><button onClick={()=>setDeleteTarget(null)}>Cancel deletion</button></>:<>
+                <button onClick={()=>{end();setMoving(null);setPanelOpen(true);setSelectedEdge(null);setAdvanced(false)}}>Measure</button>
+                <button aria-pressed={moving===shape.id} onClick={()=>{end();setMoving(moving===shape.id?null:shape.id);setPanelOpen(false);setSelectedEdge(null)}}>{moving===shape.id?'Done moving':'Move'}</button>
+                <button aria-pressed={shape.mirrored} onClick={()=>{editShape(s=>{s.mirrored=!s.mirrored});setMoving(null)}}>Mirror</button>
+                <button onClick={()=>{editShape(s=>{s.rotation=((s.rotation+90)%360) as Shape['rotation']});setMoving(null)}}>Rotate</button>
+                <button onClick={duplicatePart}>Duplicate</button>
+                <button onClick={()=>{setDeleteTarget(shape.id);setPanelOpen(false);setMoving(null)}}>Delete</button>
+              </>}
+            </div>:null}
+            onSelect={id=>selectPart(id,true)}
+            onEdge={selection=>{end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setPanelOpen(true);setAdvanced(false);setMoving(null);setDeleteTarget(null)}}
+            onPlace={(id,position)=>edit(p=>{p.areas.find(a=>a.id===area.id)!.shapes.find(s=>s.id===id)!.layout=position})}/>
+          {panelOpen&&shape?(advanced?<PartEditor key={shape.id+(selectedEdge??'part')} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onRemove={()=>{setDeleteTarget(shape.id);setPanelOpen(false);setMoving(null)}} onClose={()=>{end();setPanelOpen(false);setSelectedEdge(null)}}/>:<QuickMeasurePanel key={shape.id+(selectedEdge??'part')} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onDetails={()=>setAdvanced(true)} onClose={()=>{end();setPanelOpen(false);setSelectedEdge(null)}}/>):null}
+        </div>
+        <div className="sm-part-strip" aria-label="Parts">{area.shapes.map(s=><button key={s.id} aria-pressed={s.id===shape?.id} onClick={()=>selectPart(s.id)}>{s.name}{calculate(s).top?'':' · incomplete'}</button>)}</div>
+        {partMessage?<p className="sm-part-message" role="status">{partMessage}</p>:null}
+      </>:null}
+      <footer className="sm-footnote">Visual positions are not surveyed distances. Reference readings do not change geometry. Field measurements require fabrication review.</footer>
+    </>}
+  </div>
+}
