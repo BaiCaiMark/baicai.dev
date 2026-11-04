@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, 
 import MeasureCanvas from './components/MeasureCanvas'
 import PartEditor from './components/PartEditor'
 import QuickMeasurePanel from './components/QuickMeasurePanel'
+import OfflineStatus from './OfflineStatus'
 import QuantityField from './components/QuantityField'
 import { calculate, exportSnapshot } from './core/geometry'
 import { historyReducer, initialHistory } from './core/history'
@@ -157,6 +158,7 @@ export default function Studio() {
   return <div className="sm-studio" data-active={!!project} lang="en">
     <header className="sm-heading"><div><p className="sm-eyebrow">FIELD WORKSHEET · QUICK MEASURE BETA</p><h1>Site Measure Studio</h1></div><span className="sm-local-pill">Local projects · no account needed</span></header>
     <div className="sm-toolbar">
+      <OfflineStatus />
       <details className="sm-project-menu"><summary>Project</summary><div className="sm-project-popover">
         <button disabled={!ready} onClick={()=>void switchProject(newProject())}>New project</button><button disabled={!ready} onClick={()=>void switchProject(worksheetSample())}>Open sample worksheet</button><button onClick={()=>importer.current?.click()}>Import backup as a copy</button>
         <h2>Saved in this browser</h2>{projects.map(p=><button key={p.id} onClick={()=>void open(p.id)}>{p.name}<small>{new Date(p.updatedAt).toLocaleString()}</small></button>)}
