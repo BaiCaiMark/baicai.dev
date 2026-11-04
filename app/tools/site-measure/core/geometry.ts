@@ -1,5 +1,5 @@
 import { fieldMeasurementText } from './field'
-import { edgeOrder, edgeLabels, originLabels, paramLabels, requiredParams, statusLabels, value, type Edge, type Shape, type Reference, type Project } from './model'
+import { edgeOrder, edgeLabels, originLabels, paramLabels, requiredParams, statusLabels, treatmentOf, value, type Edge, type Shape, type Reference, type Project } from './model'
 import { formatLength, type Unit } from './units'
 
 export type Point = { x: number; y: number }
@@ -168,6 +168,10 @@ export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(s
     const q = shape.alternateDimensions[key]
     if (q.input.trim()) rows.push({ label: 'Retained alternate ' + (shape.basis === 'cabinet' ? 'finished reading ' : 'cabinet ') + paramLabels[key], text: formatLength(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] })
   }
+  for (const e of edgeOrder(shape)) {
+    const treatment = treatmentOf(shape,e)
+    if (treatment) rows.push({label:'Treatment '+edgeLabels[e],text:({'no-polish':'No Polish',polish:'Polish',miter:'Miter'} as const)[treatment] + (treatment==='miter'?' · joining compensation not calculated':'')})
+  }
   if (shape.basis === 'cabinet') {
     for (const e of edgeOrder(shape)) {
       const q = shape.allowances[e]
@@ -175,11 +179,12 @@ export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(s
     }
     if (shape.template === 'rectangle') {
       const result = (key: 'width' | 'height', a: Edge, b: Edge) => {
-        const values = [value(shape.dimensions[key]), value(shape.allowances[a]), value(shape.allowances[b])]
-        return values.map(n => formatLength(n, unit)).join(' + ') + ' = ' + formatLength(values.some(n => n === null) ? null : values.reduce<number>((s, n) => s + n!, 0), unit)
+        const values = [value(shape.allowances[a]), value(shape.dimensions[key]), value(shape.allowances[b])]
+        if(values.some(n=>n===null))return values.map(n=>formatLength(n,unit)).join(' + ')+' = Incomplete'
+        return values.filter((n,i)=>i===1||n!==0).map(n=>formatLength(n,unit)).join(' + ') + ' = ' + formatLength(values.reduce<number>((s,n)=>s+n!,0),unit)
       }
-      rows.push({ label: 'Finished length = Cabinet + Left + Right (calculated)', text: result('width', 'left', 'right') })
-      rows.push({ label: 'Finished depth = Cabinet + Back + Front (calculated)', text: result('height', 'back', 'front') })
+      rows.push({ label: 'Finished length = Left + Cabinet + Right (calculated)', text: result('width', 'left', 'right') })
+      rows.push({ label: 'Finished depth = Back + Cabinet + Front (calculated)', text: result('height', 'back', 'front') })
     }
   }
   if (geometry.top) {

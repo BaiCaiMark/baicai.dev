@@ -1,7 +1,7 @@
 'use client'
 import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
-import { edgeOrder, value, type Area, type Edge } from '../core/model'
+import { edgeOrder, treatmentOf, value, type Area, type Edge } from '../core/model'
 import { edgeNames, edgeLength, worksheetLayout } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
@@ -19,6 +19,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
   const [canvasSize,setCanvasSize]=useState({width:1000,height:600})
   const manualView=useRef(false)
   const [drag,setDrag]=useState<{id:string;position:Point}|null>(null)
+  const [snapEnabled,setSnapEnabled]=useState(true),[orthoEnabled,setOrthoEnabled]=useState(false)
   const layout=useMemo(()=>worksheetLayout(area.shapes),[area.shapes])
   const fitted=useMemo(()=>{
     if(!layout.length)return{x:0,y:0,width:1100,height:650}
@@ -122,8 +123,37 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
     if(!moved.current)return
     const dx=(now.center.x-base.center.x)*base.scale,dy=(now.center.y-base.center.y)*base.scale
     if(pointers.current.size===1&&start.current?.partId){
-      if((!start.current.handle&&moving!==start.current.partId)||!start.current.position)return // Part drag never implicitly pans or measures.
-      const position={x:Math.max(-10000,Math.min(10000,start.current.position.x+dx)),y:Math.max(-10000,Math.min(10000,start.current.position.y+dy))}
+      // A selected part can be dragged directly from its interior. Edge taps keep measurement priority.
+      if((!start.current.handle&&moving!==start.current.partId&&selected!==start.current.partId)||!start.current.position)return
+      let moveX=dx,moveY=dy
+      if((orthoEnabled||e.shiftKey)&&!start.current.handle){
+        if(Math.abs(e.clientX-start.current.x)>=Math.abs(e.clientY-start.current.y))moveY=0
+        else moveX=0
+      }
+      let position={x:start.current.position.x+moveX,y:start.current.position.y+moveY}
+      if(snapEnabled){
+        const current=layout.find(p=>p.shape.id===start.current!.partId)
+        if(current){
+          const threshold=10*base.scale
+          const nearest=(raw:number,source:number[],targets:number[])=>{
+            let nearest=raw,distance=threshold
+            for(const s of source)for(const t of targets){const offset=t-s,delta=Math.abs(offset);if(delta<distance){distance=delta;nearest=raw+offset}}
+            return nearest
+          }
+          const others=layout.filter(p=>p.shape.id!==current.shape.id)
+          if(others.length){
+            if(!(orthoEnabled||e.shiftKey)||moveX!==0){
+              const xs=others.flatMap(p=>[p.x,p.x+p.width,p.x+p.width/2])
+              position.x=nearest(position.x,[position.x,position.x+current.width,position.x+current.width/2],xs)
+            }
+            if(!(orthoEnabled||e.shiftKey)||moveY!==0){
+              const ys=others.flatMap(p=>[p.y,p.y+p.height,p.y+p.height/2])
+              position.y=nearest(position.y,[position.y,position.y+current.height,position.y+current.height/2],ys)
+            }
+          }
+        }
+      }
+      position={x:Math.max(-10000,Math.min(10000,position.x)),y:Math.max(-10000,Math.min(10000,position.y))}
       setManual(base.box) // Freeze the view while moving; Fit All is explicit.
       const next={id:start.current.partId,position};liveDrag.current=next;setDrag(next);return
     }
@@ -149,7 +179,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
   }
   const zoom=(factor:number)=>{const b=liveBox.current;setManual({x:b.x+b.width*(1-factor)/2,y:b.y+b.height*(1-factor)/2,width:b.width*factor,height:b.height*factor})}
   return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving}>
-    <div className="sm-canvas-commandbar">{toolbar}<div className="sm-canvas-tools"><button onClick={()=>zoom(.8)} aria-label="Zoom in">＋</button><button onClick={()=>zoom(1.25)} aria-label="Zoom out">−</button><button onClick={()=>setManual(null)}>Fit All</button></div></div>
+    <div className="sm-canvas-commandbar">{toolbar}<div className="sm-canvas-tools"><button aria-pressed={snapEnabled} onClick={()=>setSnapEnabled(v=>!v)} title="Align nearby part edges">Snap</button><button aria-pressed={orthoEnabled} onClick={()=>setOrthoEnabled(v=>!v)} title="Move strictly along one axis">Ortho</button><button onClick={()=>zoom(.8)} aria-label="Zoom in">＋</button><button onClick={()=>zoom(1.25)} aria-label="Zoom out">−</button><button onClick={()=>setManual(null)}>Fit All</button></div></div>
     <svg ref={svg} className="sm-canvas" aria-label={area.name+' measurement worksheet'} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
       {layout.map(item=>{
         const {shape,points,local}=item,position=drag?.id===shape.id?drag.position:{x:item.x,y:item.y},g=calculate(shape)
@@ -164,7 +194,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
             const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=sign*dy/len,ny=-sign*dx/len
             const offset=34,la={x:a.x+nx*offset,y:a.y+ny*offset},lb={x:b.x+nx*offset,y:b.y+ny*offset},mid={x:(la.x+lb.x)/2,y:(la.y+lb.y)/2}
             const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge,n=edgeLength(shape,edge,!!g.top)
-            return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active}>
+            return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active} data-treatment={treatmentOf(shape,edge)??"unset"}>
               <line className="sm-edge-highlight" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
               {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
@@ -189,6 +219,6 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
       })}
     </svg>
     {!layout.length?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
-    <p className="sm-canvas-hint">{moving?'MOVE PART · drag the selected geometry · Done moving to measure edges · blank space pans; two fingers zoom':'Tap inside a part · drag its arrow handle to move · tap a line to measure · drag blank space to pan · pinch to zoom'}</p>
+    <p className="sm-canvas-hint">{moving?'Move selected part · tap Done moving to measure edges':'Tap edge to measure · tap part then drag inside it to move · blank space pans · two fingers zoom'}</p>
   </div>
 }

@@ -18,12 +18,12 @@ async function interior(p:Page,name:string){
     }
     throw Error('No exposed interior for '+el.getAttribute('aria-label'))
   })
-  await p.touchscreen.tap(point.x,point.y);return point
+  await p.touchscreen.tap(point.x,point.y);if(await p.locator('.sm-quick-panel').count())await p.getByRole('button',{name:'Done',exact:true}).click();return point
 }
 async function edge(p:Page,part:string,name:string){
   const line=p.getByRole('button',{name:part+' '+name,exact:true}).locator('.sm-edge-hit')
   const q=await line.evaluate(el=>{const l=el as SVGLineElement,q=new DOMPoint((l.x1.baseVal.value+l.x2.baseVal.value)/2,(l.y1.baseVal.value+l.y2.baseVal.value)/2).matrixTransform(l.getScreenCTM()!);return{x:q.x,y:q.y}})
-  await p.touchscreen.tap(q.x,q.y);await expect(p.locator('.sm-context-heading h2')).toHaveText(name)
+  await p.touchscreen.tap(q.x,q.y);await expect(p.locator('.sm-quick-panel')).toBeVisible();await p.getByRole('button',{name:/^More details/}).click();await expect(p.locator('.sm-context-heading h2')).toHaveText(name)
 }
 test('one scaled canvas: interior selection, move, correct transformed edge, duplicate, delete and Undo/Redo',async({page})=>{
   await sample(page);const before=await backup(page,'p3-before-actions.json')
@@ -93,13 +93,13 @@ test('touch Move cancellation and two-finger zoom do not commit placement or edg
 test('pinch anchor remains stable after zoom and editor resize of the shared SVG',async({page,context})=>{
   await sample(page);await page.getByRole('button',{name:'Zoom in',exact:true}).click()
   await page.getByRole('button',{name:'Kitchen L Back run',exact:true}).press('Enter')
-  await expect(page.locator('#sm-edge-measurement')).toHaveValue('96')
+  await expect(page.locator('.sm-quick-panel')).toBeVisible();await expect(page.getByLabel('Length',{exact:true})).toHaveValue('96')
   const svg=page.locator('svg.sm-canvas');await svg.scrollIntoViewIfNeeded();const b=(await svg.boundingBox())!,x=b.x+b.width/2,y=b.y+b.height/2
   const anchor=()=>svg.evaluate((el,p)=>{const q=new DOMPoint(p.x,p.y).matrixTransform((el as SVGGraphicsElement).getScreenCTM()!.inverse());return{x:q.x,y:q.y}},{x,y})
   const before=await anchor(),cdp=await context.newCDPSession(page),points=(d:number)=>[{x:x-d,y,id:0},{x:x+d,y,id:1}]
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points(30)});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:points(65)});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
   const after=await anchor();expect(Math.abs(before.x-after.x)).toBeLessThan(.01);expect(Math.abs(before.y-after.y)).toBeLessThan(.01)
-  await expect(page.locator('#sm-edge-measurement')).toHaveValue('96')
+  await expect(page.getByLabel('Length',{exact:true})).toHaveValue('96')
 })
 test('tablet/desktop selections keep the toolbar and every Part in the shared workspace',async({page})=>{
   await sample(page)

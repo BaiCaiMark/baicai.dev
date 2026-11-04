@@ -15,12 +15,12 @@ async function linePoint(p:Page,part:string,edge:string,t=.5,offset=0,scroll=tru
     return{x:a.x+dx*t-dy/length*offset,y:a.y+dy*t+dx/length*offset}
   },{t,offset})
 }
-async function edge(p:Page,part:string,name:string,t=.5,offset=0){const q=await linePoint(p,part,name,t,offset);await p.touchscreen.tap(q.x,q.y);await expect(p.locator('.sm-context-heading h2')).toHaveText(name)}
+async function edge(p:Page,part:string,name:string,t=.5,offset=0){const q=await linePoint(p,part,name,t,offset);await p.touchscreen.tap(q.x,q.y);await expect(p.locator('.sm-quick-panel')).toBeVisible();await p.getByRole('button',{name:/^More details/}).click();await expect(p.locator('.sm-context-heading h2')).toHaveText(name)}
 const done=(p:Page)=>p.getByRole('button',{name:'Done',exact:true})
 test('interior select → handle touch drag → release is exactly one reversible layout action',async({page,context})=>{
   await sample(page);const before=await backup(page,'p31-before-drag.json')
   const interior=await page.getByRole('button',{name:'Part Kitchen L',exact:true}).evaluate(el=>{const q=new DOMPoint(55,55).matrixTransform((el as SVGGraphicsElement).getScreenCTM()!);return{x:q.x,y:q.y}})
-  await page.touchscreen.tap(interior.x,interior.y);await expect(page.locator('.sm-context')).toHaveCount(0)
+  await page.touchscreen.tap(interior.x,interior.y);await expect(page.locator('.sm-quick-panel')).toBeVisible();await done(page).click()
   const q=await handle(page),cdp=await context.newCDPSession(page)
   await touch(cdp,'touchStart',[{...q,id:0}])
   for(let i=1;i<=6;i++)await touch(cdp,'touchMove',[{x:q.x+i*8,y:q.y+i*3,id:0}])
@@ -76,7 +76,7 @@ test('nearest L corner edges and offset touch targets stay semantic through zoom
   }
   // Explicit dimension labels retain their edge even outside the line corridor.
   const label=page.getByRole('button',{name:'Kitchen L Back run',exact:true}).locator('.sm-label-bg')
-  await label.tap();await expect(page.locator('.sm-context-heading h2')).toHaveText('Back run')
+  await label.tap();await expect(page.locator('.sm-quick-panel')).toBeVisible();await page.getByRole('button',{name:/^More details/}).click();await expect(page.locator('.sm-context-heading h2')).toHaveText('Back run')
 })
 test('inch shortcuts preserve focus, insertion caret and selected text; native entry and mm remain',async({page})=>{
   await sample(page);await edge(page,'Kitchen L','Right end')
@@ -127,6 +127,7 @@ test('keyboard handle and edge controls work; editor opening does not zoom or co
   const scale=()=>page.locator('svg.sm-canvas').evaluate(el=>(el as SVGGraphicsElement).getScreenCTM()!.a)
   const original=await scale()
   await page.getByRole('button',{name:'Kitchen L Right end',exact:true}).press('Enter')
+  await page.getByRole('button',{name:/^More details/}).click()
   await expect(page.locator('#sm-edge-measurement')).toBeFocused()
   expect(await scale()).toBeCloseTo(original,5)
   await page.locator('#sm-edge-measurement').fill('26');expect(await scale()).toBeCloseTo(original,5)
@@ -139,6 +140,7 @@ test('portrait and landscape reduced visual viewport keep Done and active input 
   for(const [width,height] of [[1024,768],[768,1024],[390,844]]){
     await page.setViewportSize({width,height});await page.getByRole('button',{name:'Fit All',exact:true}).click()
     await page.getByRole('button',{name:'Kitchen L Back run',exact:true}).press('Enter')
+    await page.getByRole('button',{name:/^More details/}).click()
     // Model keyboard occlusion without pretending to test a physical Android keyboard.
     await page.evaluate(()=>{
       Object.defineProperty(window.visualViewport!,'height',{configurable:true,value:Math.round(innerHeight*.58)})

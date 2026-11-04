@@ -17,6 +17,8 @@ async function edge(page:Page,part:string,name:string){
     return{x:point.x,y:point.y}
   })
   await page.touchscreen.tap(p.x,p.y)
+  await expect(page.locator('.sm-quick-panel')).toBeVisible()
+  await page.getByRole('button',{name:/^More details/}).click()
   await expect(page.locator('.sm-context-heading h2')).toHaveText(name)
 }
 const measurement=(p:Page)=>p.locator('#sm-edge-measurement')

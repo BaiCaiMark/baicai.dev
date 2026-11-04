@@ -73,3 +73,44 @@ html[data-theme="dark"] .sm-studio{--sm-bg:#172820;--sm-paper:#21372c;--sm-ink:#
 .sm-entry-keys{flex-wrap:nowrap;overflow-x:auto;padding:2px 0}.sm-entry-keys button{flex-shrink:0}.sm-selected-allowance .sm-field{margin-top:4px}.sm-selected-allowance>p{font-size:11px;margin:3px 0}
 .sm-studio{padding-bottom:calc(18px + var(--sm-keyboard-space,0px))}.sm-studio .sm-context-heading .sm-editor-done:hover{background:var(--sm-green);color:var(--sm-paper)}
 .sm-context-heading .sm-header-result{font-weight:650;color:var(--sm-ink);margin:2px 0 0}
+
+/* Quick Measure: one surface for the few actions that are repeated on site. */
+.sm-quick-panel .sm-context-body{padding:12px 14px 20px}
+.sm-quick-section-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:6px 0 7px}
+.sm-quick-section-title strong{font-size:14px}
+.sm-quick-section-title span{font-size:10px;color:var(--sm-muted);text-align:right}
+.sm-quick-dimensions,.sm-quick-edges{border-bottom:1px solid var(--sm-line);padding-bottom:12px;margin-bottom:10px}
+.sm-quick-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.sm-quick-fields .sm-field{margin:3px 0}.sm-quick-fields .sm-input-line input{font-size:21px;padding:7px 10px}
+.sm-quick-fields .sm-input-line span{position:static;display:block;transform:none;padding:0 2px}
+.sm-quick-edge-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.sm-quick-edge-grid button{display:flex;align-items:start;flex-direction:column;gap:1px;text-align:left;min-width:0;padding:8px 10px;min-height:66px}
+.sm-quick-edge-grid button span{font-size:12px}.sm-quick-edge-grid button strong{font-size:11px}.sm-quick-edge-grid button small{font-size:11px;opacity:.75}
+.sm-quick-edges h3{font-size:13px;margin:10px 0 7px}
+.sm-quick-choices{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0 11px}
+.sm-quick-choices button{min-width:57px;min-height:46px;padding:7px 9px;font-size:12px;flex:1 1 auto}
+.sm-quick-notice{color:var(--sm-danger);font-size:11px}
+.sm-quick-fill{width:100%;border-style:dashed!important;font-size:11px!important;margin-top:4px}
+.sm-quick-result{padding:10px 12px;background:var(--sm-soft);border-radius:8px;margin-bottom:10px}
+.sm-quick-result strong{font-size:13px}.sm-quick-result p{font-size:12px;margin:3px 0}
+.sm-quick-result .sm-quick-final{font-size:17px;font-weight:700}
+.sm-quick-details{width:100%;font-size:11px!important}
+.sm-canvas-tools button[aria-pressed="true"]{background:var(--sm-green);color:var(--sm-paper)}
+@media(max-width:700px){
+  .sm-quick-panel .sm-context-body{padding:9px 12px 20px}
+  .sm-quick-fields .sm-input-line input{font-size:20px}
+  .sm-quick-choices button{min-width:59px}
+  .sm-canvas-commandbar .sm-canvas-tools button{min-height:42px;padding:6px}
+}
+
+/* Tapping a line shows the two essential actions first, without scrolling past dimension forms. */
+.sm-quick-panel[data-edge-selected="true"] .sm-context-body{display:flex;flex-direction:column}
+.sm-quick-panel[data-edge-selected="true"] .sm-quick-edges{order:0}
+.sm-quick-panel[data-edge-selected="true"] .sm-quick-result{order:1}
+.sm-quick-panel[data-edge-selected="true"] .sm-quick-dimensions{order:2}
+.sm-quick-panel[data-edge-selected="true"] .sm-quick-details{order:3}
+.sm-quick-panel[data-edge-selected="true"] .sm-quick-edge-grid{display:none}
+/* Keep fraction-key space stable while the focused input blurs on touch. */
+.sm-edge[data-treatment="polish"] .sm-edge-highlight{stroke:#118775;stroke-width:3}
+.sm-edge[data-treatment="miter"] .sm-edge-highlight{stroke:#c58b31;stroke-width:3;stroke-dasharray:7 3}
+.sm-edge[data-selected="true"] .sm-edge-highlight{stroke:#d49b32;stroke-width:5}

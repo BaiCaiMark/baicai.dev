@@ -14,6 +14,8 @@ export type Quantity = z.infer<typeof quantitySchema>
 export type Status = Quantity['status']
 export type Param = 'width' | 'height' | 'legX' | 'legY'
 export type Edge = 'back' | 'right' | 'front' | 'left' | 'innerX' | 'innerY'
+export const treatmentSchema = z.enum(['no-polish', 'polish', 'miter'])
+export type Treatment = z.infer<typeof treatmentSchema>
 export const referenceSchema = z.object({
   id, kind: z.enum(['sink', 'cooktop']), basis: z.enum(['cabinet', 'countertop']),
   fromX: z.enum(['left', 'right']), fromY: z.enum(['back', 'front']),
@@ -39,6 +41,8 @@ export const shapeSchema = z.object({
   mirrored: z.boolean(), angleStatus: statusSchema, notes: text,
   references: z.array(referenceSchema).max(30),
   fieldRecords: z.array(fieldRecordSchema).max(80).default([]),
+  // Optional for schema-v2 backups created before quick edge treatment was introduced.
+  treatments: z.partialRecord(edgeSchema, treatmentSchema).optional(),
   layout: z.object({x:z.number().finite().min(-10000).max(10000),y:z.number().finite().min(-10000).max(10000)}).strict().optional(),
 }).strict()
 const currentProjectSchema = z.object({
@@ -108,6 +112,40 @@ export function duplicateShape(source: Shape, existingNames: string[], position:
   copy.name = name
   copy.layout = { x: Math.max(-10000, Math.min(10000, position.x + 48)), y: Math.max(-10000, Math.min(10000, position.y + 48)) }
   return copy
+}
+export function treatmentOf(shape: Shape, edge: Edge): Treatment | null {
+  return shape.treatments?.[edge] ?? null
+}
+// Only replace blank or default-sourced values. Manual custom allowances remain untouched.
+export function setTreatment(shape: Shape, edge: Edge, treatment: Treatment, project: Project): void {
+  shape.treatments ??= {}
+  const previous = shape.treatments[edge]
+  shape.treatments[edge] = treatment
+  if (previous === treatment) return
+  const existing = shape.allowances[edge]
+  if (existing.input.trim() && existing.origin !== 'default') return
+  if (treatment === 'miter') {
+    // No implicit slab thickness or joining geometry for miter.
+    shape.allowances[edge] = quantity('', project.unit, 'default')
+    return
+  }
+  if (treatment === 'no-polish') {
+    shape.allowances[edge] = { ...quantity('0', project.unit, 'default'), defaultRevision: project.defaults.revision }
+    return
+  }
+  shape.allowances[edge] = {
+    ...(edge === 'front' ? project.defaults.front : project.defaults.end),
+    origin: 'default', status: 'unconfirmed', defaultRevision: project.defaults.revision,
+  }
+}
+// One-step rectangle starting point, with visible editable defaults (not measured readings).
+export function applyRectangleQuickDefaults(shape: Shape, project: Project): void {
+  if (shape.template !== 'rectangle') return
+  shape.treatments = {back:'no-polish', right:'no-polish', front:'polish', left:'no-polish'}
+  for (const edge of edgeOrder(shape)) {
+    const preset = edge === 'front' ? project.defaults.front : quantity('0', project.unit, 'default')
+    shape.allowances[edge] = {...preset,origin:'default',status:'unconfirmed',defaultRevision:project.defaults.revision}
+  }
 }
 export function applyDefault(shape: Shape, edge: Edge, project: Project, kind: 'end' | 'front'): Shape {
   return { ...shape, allowances: { ...shape.allowances, [edge]: { ...project.defaults[kind], origin: 'default', defaultRevision: project.defaults.revision } } }
