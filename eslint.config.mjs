@@ -13,6 +13,7 @@ export default defineConfig([
     'out/**',
     'build/**',
     'baicai-brand-kit/**',
+    'public/cad-viewer-wasm/**',
     'next-env.d.ts',
   ]),
 ])
