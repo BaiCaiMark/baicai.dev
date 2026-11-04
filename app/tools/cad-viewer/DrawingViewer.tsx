@@ -64,44 +64,105 @@ export default function DrawingViewer() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    // The upstream engine measures on pointerdown. A two-finger pinch would
-    // therefore wrongly count as two measurement taps. On touchscreens we
-    // intercept touch pointers and only measure a stationary SINGLE-finger tap
-    // on pointerup. Native touchmove handling still provides pan and pinch.
-    type Tap = { x: number; y: number; moved: boolean; multiTouch: boolean }
-    const pointers = new Map<number, Tap>()
+    // @cadview/core currently handles both touch *and* pointer events for the
+    // same fingers. This causes duplicate pan during pinch-to-zoom on iOS.
+    // Handle ALL touch pointers here, blocking the engine's overlapping legacy
+    // touch handlers. Keep the engine's mouse/trackpad handling unchanged.
+    type TouchPointer = {
+      startX: number
+      startY: number
+      x: number
+      y: number
+      moved: boolean
+      multiTouch: boolean
+    }
+    const pointers = new Map<number, TouchPointer>()
+    const stopLegacyTouch = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault()
+      event.stopImmediatePropagation()
+    }
     const onDown = (event: PointerEvent) => {
-      if (!measureModeRef.current || event.pointerType !== 'touch') return
-      const tap: Tap = { x: event.clientX, y: event.clientY, moved: false, multiTouch: pointers.size > 0 }
-      if (pointers.size > 0) for (const other of pointers.values()) other.multiTouch = true
-      pointers.set(event.pointerId, tap)
+      if (event.pointerType !== 'touch') return
+      const multiTouch = pointers.size > 0
+      if (multiTouch) {
+        for (const touch of pointers.values()) touch.multiTouch = true
+      }
+      pointers.set(event.pointerId, {
+        startX: event.clientX, startY: event.clientY,
+        x: event.clientX, y: event.clientY,
+        moved: false, multiTouch,
+      })
       event.stopImmediatePropagation()
     }
     const onMove = (event: PointerEvent) => {
-      const tap = pointers.get(event.pointerId)
-      if (tap && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 10) tap.moved = true
+      if (event.pointerType !== 'touch') return
+      // Always suppress the engine's pointer handling for touch, even after a
+      // canceled gesture, or its own pan would be applied a second time.
+      event.stopImmediatePropagation()
+      const touch = pointers.get(event.pointerId)
+      if (!touch) return
+      const viewer = viewerRef.current
+      const previous = [...pointers.values()].map(pointer => ({ x: pointer.x, y: pointer.y }))
+      const dx = event.clientX - touch.x
+      const dy = event.clientY - touch.y
+      touch.x = event.clientX
+      touch.y = event.clientY
+      if (Math.hypot(touch.x - touch.startX, touch.y - touch.startY) > 10) touch.moved = true
+      if (!viewer) return
+
+      if (pointers.size === 1) {
+        // Drag with one finger, including in Measure mode. A stationary tap
+        // continues to select a measurement point on pointerup.
+        if (touch.moved) viewer.handlePan(dx, dy)
+      } else if (pointers.size === 2) {
+        const current = [...pointers.values()]
+        const oldDistance = Math.hypot(previous[0].x - previous[1].x, previous[0].y - previous[1].y)
+        const newDistance = Math.hypot(current[0].x - current[1].x, current[0].y - current[1].y)
+        if (oldDistance < 2 || newDistance < 2) return
+        const rect = canvas.getBoundingClientRect()
+        const oldX = (previous[0].x + previous[1].x) / 2 - rect.left
+        const oldY = (previous[0].y + previous[1].y) / 2 - rect.top
+        const newX = (current[0].x + current[1].x) / 2 - rect.left
+        const newY = (current[0].y + current[1].y) / 2 - rect.top
+        // Zoom about the PREVIOUS centroid, then translate by its motion.
+        // This keeps the same CAD point underneath the fingers as they spread.
+        viewer.handleZoom(oldX, oldY, newDistance / oldDistance)
+        viewer.handlePan(newX - oldX, newY - oldY)
+      }
     }
     const onUp = (event: PointerEvent) => {
-      const tap = pointers.get(event.pointerId)
-      if (!tap) return
+      if (event.pointerType !== 'touch') return
+      event.stopImmediatePropagation()
+      const touch = pointers.get(event.pointerId)
       pointers.delete(event.pointerId)
-      if (!tap.moved && !tap.multiTouch && measureModeRef.current) {
+      if (touch && !touch.moved && !touch.multiTouch && measureModeRef.current) {
         const rect = canvas.getBoundingClientRect()
         viewerRef.current?.handleClick(event.clientX - rect.left, event.clientY - rect.top)
       }
+    }
+    const onCancel = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return
+      pointers.delete(event.pointerId)
       event.stopImmediatePropagation()
     }
-    const onCancel = (event: PointerEvent) => { pointers.delete(event.pointerId) }
     canvas.addEventListener('pointerdown', onDown, true)
     canvas.addEventListener('pointermove', onMove, true)
     canvas.addEventListener('pointerup', onUp, true)
     canvas.addEventListener('pointercancel', onCancel, true)
+    canvas.addEventListener('touchstart', stopLegacyTouch, { capture: true, passive: false })
+    canvas.addEventListener('touchmove', stopLegacyTouch, { capture: true, passive: false })
+    canvas.addEventListener('touchend', stopLegacyTouch, { capture: true, passive: false })
+    canvas.addEventListener('touchcancel', stopLegacyTouch, { capture: true, passive: false })
 
     return () => {
       canvas.removeEventListener('pointerdown', onDown, true)
       canvas.removeEventListener('pointermove', onMove, true)
       canvas.removeEventListener('pointerup', onUp, true)
       canvas.removeEventListener('pointercancel', onCancel, true)
+      canvas.removeEventListener('touchstart', stopLegacyTouch, true)
+      canvas.removeEventListener('touchmove', stopLegacyTouch, true)
+      canvas.removeEventListener('touchend', stopLegacyTouch, true)
+      canvas.removeEventListener('touchcancel', stopLegacyTouch, true)
       viewerRef.current?.destroy()
       viewerRef.current = null
       if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current)
