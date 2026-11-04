@@ -275,7 +275,6 @@ export default function DrawingViewer() {
           <input
             ref={inputRef}
             type="file"
-            accept=".dxf,.dwg,.pdf,application/pdf"
             className={styles.fileInput}
             aria-label="Choose a drawing file"
             onChange={event => {
