@@ -30,6 +30,8 @@ export type FieldRecord = z.infer<typeof fieldRecordSchema>
 const dimensionsSchema = z.object({ width: quantitySchema, height: quantitySchema, legX: quantitySchema, legY: quantitySchema }).strict()
 export const shapeSchema = z.object({
   id, name: z.string().min(1).max(120), template: z.enum(['rectangle', 'l']),
+  // A stepped vanity reuses the proven six-edge L geometry; old projects omit this optional tag.
+  profile: z.enum(['vanity-step']).optional(),
   basis: z.enum(['cabinet', 'finished']),
   dimensions: dimensionsSchema,
   alternateDimensions: dimensionsSchema,
@@ -92,6 +94,23 @@ export function newShape(template: Shape['template'], unit: Unit, index = 1): Sh
     rotation: 0, mirrored: false, angleStatus: 'unconfirmed', notes: '', references: [], fieldRecords: [],
   }
 }
+/** The DXF supplied two mirrored 70 × 22.5 inch stepped outlines (deep width 40, shallow depth 7).
+ * This creates an EMPTY measured template, never misrepresenting sample contour coordinates as surveyed cabinet dimensions.
+ * Deep Left is the canonical L shape; Deep Right is mirrored.
+ */
+export function newVanityStep(project: Project, deepSide: 'left' | 'right', index = 1): Shape {
+  const shape = newShape('l', project.unit, index)
+  shape.profile = 'vanity-step'
+  shape.name = 'Vanity Step · Deep ' + (deepSide === 'left' ? 'Left ' : 'Right ') + index
+  shape.mirrored = deepSide === 'right'
+  shape.notes = 'Template silhouette from reference DXF 111401(1).dxf: overall 70″ × 22.5″, full-depth run 40″, shallow section 30″ × 7″. The DXF does not identify cabinet/finished basis, sink, or edge treatments. Enter actual cabinet measurements; sample numbers are not field readings.'
+  // Only the position/form of the blank guide is based on the reference.
+  // 0″ is an explicit, unconfirmed project default, individually editable per edge.
+  for (const edge of edgeOrder(shape)) {
+    shape.allowances[edge] = {...quantity('0', project.unit, 'default'), status: 'unconfirmed', defaultRevision: project.defaults.revision}
+  }
+  return shape
+}
 export function newProject(): Project {
   return {
     schemaVersion: 2, id: uid(), name: 'New measurement project', revision: 0, updatedAt: new Date().toISOString(), unit: 'in',
@@ -134,7 +153,7 @@ export function setTreatment(shape: Shape, edge: Edge, treatment: Treatment, pro
     return
   }
   shape.allowances[edge] = {
-    ...(edge === 'front' ? project.defaults.front : project.defaults.end),
+    ...((edge === 'front' || edge === 'innerX') ? project.defaults.front : project.defaults.end),
     origin: 'default', status: 'unconfirmed', defaultRevision: project.defaults.revision,
   }
 }

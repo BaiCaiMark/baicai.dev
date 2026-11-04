@@ -6,7 +6,7 @@ import QuickMeasurePanel from './components/QuickMeasurePanel'
 import QuantityField from './components/QuantityField'
 import { calculate, exportSnapshot } from './core/geometry'
 import { historyReducer, initialHistory } from './core/history'
-import { applyRectangleQuickDefaults, duplicateShape, importCopy, newProject, newShape, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
+import { applyRectangleQuickDefaults, duplicateShape, importCopy, newProject, newShape, newVanityStep, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
 import type { Unit } from './core/units'
@@ -126,10 +126,12 @@ export default function Studio() {
       }
     } catch (e) { setError('Export failed: ' + errorText(e)) } finally { setBusy(false) }
   }
-  const addShape = (template: Shape['template']) => {
+  const addShape = (template: Shape['template'] | 'vanity-step-left' | 'vanity-step-right') => {
     if (!area || !project) return
     if (area.shapes.length >= 60 || project.areas.reduce((n, a) => n + a.shapes.length, 0) >= 200) { setError('Limit: 60 parts per area, 200 per project'); return }
-    const s = newShape(template, project.unit, area.shapes.length + 1)
+    const s = template.startsWith('vanity-step-')
+      ? newVanityStep(project, template === 'vanity-step-left' ? 'left' : 'right', area.shapes.length + 1)
+      : newShape(template as Shape['template'], project.unit, area.shapes.length + 1)
     applyRectangleQuickDefaults(s,project)
     const existing = worksheetLayout(area.shapes)
     s.layout = {x:100,y:Math.min(10000,Math.max(-90,...existing.map(p=>p.y+p.height))+200)}
@@ -180,7 +182,7 @@ export default function Studio() {
       <div className="sm-area-bar"><div className="sm-area-tabs" aria-label="Areas">{project.areas.map(a=><button key={a.id} aria-pressed={area?.id===a.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'')}}>{a.name}<span>{a.shapes.length} parts</span></button>)}</div><button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}>＋ Area</button></div>
       {area?<>
         <div className="sm-area-heading"><details className="sm-area-settings"><summary>{area.name} <span>▾</span></summary><div><label>Area name<input aria-label="Area name" maxLength={120} value={area.name} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.name=e.target.value||'Unnamed area'},'area-name')} onBlur={end}/></label><label>Area notes<textarea aria-label="Area notes" maxLength={4000} value={area.notes} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.notes=e.target.value},'area-notes')} onBlur={end}/></label></div></details>
-          <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button></div></div>
+          <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button><details className="sm-template-picker"><summary>＋ Vanity Step</summary><div className="sm-template-picker-options"><p>Stepped bathroom vanity · choose the full-depth side.</p><button onClick={e=>{addShape('vanity-step-left');e.currentTarget.closest('details')!.open=false}}>Deep Left</button><button onClick={e=>{addShape('vanity-step-right');e.currentTarget.closest('details')!.open=false}}>Deep Right</button></div></details></div></div>
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
           <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} unit={project.unit} moving={moving===shape?.id?moving:null}
             toolbar={shape?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">

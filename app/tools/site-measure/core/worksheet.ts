@@ -60,6 +60,15 @@ export function displayOutline(shape: Shape): { points: Point[]; guide: boolean 
   if (g.top) return { points: g.top, guide: false }
   if (g.base) return { points: g.base, guide: true }
   // Deliberately a dashed, watermarked template, never used by an exporter.
+  // The scaled guide follows the uploaded DXF's 70 × 22.5 / 40 × 22.5 / 30 × 7 silhouette.
+  // It is NOT a measured dimension and must never enter PDF/DXF manufacturing geometry.
+  if (shape.profile === 'vanity-step') {
+    const inch = 25.4
+    return {points: [
+      {x:0,y:0},{x:70*inch,y:0},{x:70*inch,y:7*inch},
+      {x:40*inch,y:7*inch},{x:40*inch,y:22.5*inch},{x:0,y:22.5*inch},
+    ],guide:true}
+  }
   return { points: shape.template === 'rectangle'
     ? [{x:0,y:0},{x:1600,y:0},{x:1600,y:900},{x:0,y:900}]
     : [{x:0,y:0},{x:2000,y:0},{x:2000,y:600},{x:700,y:600},{x:700,y:1500},{x:0,y:1500}], guide: true }
