@@ -267,3 +267,14 @@
 - 已存在的舊 L 工程若沒有 OPEN 資料，提供一次性的「套用 OPEN 預設」入口，手動 Custom allowance 不改。
 - Canvas-first 移除圖形右上角的十字 Move handle；Part 內部直接拖曳即移動，邊線點擊繼續優先進入尺寸編輯；Classic 暫維持原功能以保留回歸比較。
 - 保持局限：這是現場量尺示意工具；未完整量得的輪廓不能稱為可 CNC 的精確 finished 檯面。
+
+## 21. 方向尺寸與實體邊屬性分流（2026-11-06，Canvas-first Preview）
+- 工地用戶指出：點「上方 60」卻要另外點右側才可設定 1″，點「右邊 21」卻要另外點下方才可設定 1.5″，嚴重違反手繪筆記直覺。
+- 本輪實作將 **Dimension label** 與 **Physical edge line** 視為兩個不同的操作目標：
+  - 點尺寸數字（在標註線外側的白色小框）→ 小型方向輸入區，列出該方向兩端 Overhang + Cabinet 實測，立即顯示 Finished；右側 End 1″ 及前方 1.5″ 可在同一個畫面一鍵選擇。
+  - 點檯面實際邊界 → 獨立的 OPEN / Not OPEN、No Polish / Polish / Miter、Note，**不再顯示 Cabinet 尺寸 / Overhang 的長表單**；OPEN 仍可帶入預設，手動覆寫保護既有規則。
+- 示範：Rectangle 右側 OPEN 給 1″，上方尺寸選框直接編輯 Left 0 + Cabinet 60 + Right 1 = Finished 61；右側尺寸選框直接編輯 Back 0 + Cabinet 21 + Front 1.5 = Finished 22.5。
+- 不需等待所有尺寸完整，已量得單一方向和其兩端 allowance 的 Finished 數字即可在圖上顯示；**整個輪廓未完成時仍標示 Finished · incomplete，DXF 不得誤當可加工圖**。
+- 圖紙移除自動加上的中文「總長/最深處/深淺差」標籤；只留下尺寸數字與使用者自己的 Note。直接模式移除冗餘 Move 工具列按鈕，仍可以拖動選中的 Part。
+- L-shape 保持四個獨立控制尺寸；內凹邊的計算尺寸只讀，方向算式由 `dimensionTerms` 綁定幾何而非依外觀猜測。
+- Classic / main 的操作暫不替換。用戶驗收後再評估是否成為預設。

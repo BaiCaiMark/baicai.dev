@@ -2,18 +2,18 @@
 import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
 import { edgeOrder, treatmentOf, value, type Area, type Edge } from '../core/model'
-import { edgeNames, edgeLength, worksheetLayout } from '../core/worksheet'
+import { edgeNames, edgeLength, finishedEdgeReading, worksheetLayout } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
-type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; directMode?: boolean; unit: Unit; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
+type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; directMode?: boolean; unit: Unit; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
 const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
-export default function MeasureCanvas({ area, selected, selectedEdge, selectedReference, floatingEditor, directMode, unit, moving, toolbar, onSelect, onEdge, onReference, onPlace }: Props) {
+export default function MeasureCanvas({ area, selected, selectedEdge, selectedReference, floatingEditor, directMode, unit, moving, toolbar, onSelect, onEdge, onDimension, onReference, onPlace }: Props) {
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
-  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;refId:string|null;position:Point|null;handle:boolean} | null>(null)
+  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;dimension:boolean;refId:string|null;position:Point|null;handle:boolean} | null>(null)
   const moved = useRef(false)
   const [manual,setManual]=useState<Bounds|null>(null),[ratio,setRatio]=useState(1.8)
   const [canvasSize,setCanvasSize]=useState({width:1000,height:600})
@@ -97,6 +97,24 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
     const y=Math.max(6,Math.min(root.height-popupHeight-6,desired>54?desired:point.y-root.top+12))
     setEditorAnchor(prev=>prev&&Math.abs(prev.x-x)<.5&&Math.abs(prev.y-y)<.5?prev:{x,y})
   },[selectedEdge,selectedReference,box,layout,floatingEditor])
+  // When the editing label sits low on a phone, keep its floating editor visible
+  // above the mobile browser chrome / soft keyboard without changing drawing scale.
+  useLayoutEffect(()=>{
+    if(!editorAnchor)return
+    const reveal=()=>{
+      const panel=shell.current?.querySelector<HTMLElement>('.sm-canvas-floating')
+      if(!panel)return
+      const viewport=window.visualViewport
+      const top=viewport?.offsetTop??0
+      const bottom=top+(viewport?.height??window.innerHeight)
+      const rect=panel.getBoundingClientRect()
+      if(rect.bottom>bottom-12)window.scrollBy({top:rect.bottom-bottom+12,behavior:'instant'})
+      else if(rect.top<top+12)window.scrollBy({top:rect.top-top-12,behavior:'instant'})
+    }
+    const frame=requestAnimationFrame(reveal)
+    window.visualViewport?.addEventListener('resize',reveal)
+    return()=>{cancelAnimationFrame(frame);window.visualViewport?.removeEventListener('resize',reveal)}
+  },[editorAnchor,edgePart,edgeName,selectedReference])
   const center=()=>{
     const ps=[...pointers.current.values()]
     return{center:{x:ps.reduce((s,p)=>s+p.x,0)/ps.length,y:ps.reduce((s,p)=>s+p.y,0)/ps.length},distance:ps.length>1?Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y):0}
@@ -114,9 +132,10 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
       const target=e.target as Element,handle=!!target.closest('[data-move-handle]')
       const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??null
       let partId=target.closest('[data-shape]')?.getAttribute('data-shape')??null
+      const dimension=!!directMode&&!!target.closest('[data-dimension]')
       let edge=target.closest('[data-dimension]')?.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
       if(!edge&&target.closest('.sm-direct-edge-name,.sm-direct-note-pin'))edge=target.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
-      if(!handle&&!edge&&!refId){
+      if(!handle&&!dimension&&!edge&&!refId){
         const candidates:ScreenEdge[]=[]
         // Resolve all nearby edges in screen space, independent of transparent stroke paint order.
         e.currentTarget.querySelectorAll<SVGLineElement>('.sm-edge-hit').forEach(line=>{
@@ -129,7 +148,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
         if(hit){partId=hit.partId;edge=hit.edge}
       }
       const item=layout.find(p=>p.shape.id===partId)
-      start.current={x:e.clientX,y:e.clientY,partId,edge,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
+      start.current={x:e.clientX,y:e.clientY,partId,edge,dimension,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
     }else{moved.current=true;start.current=null;liveDrag.current=null;setDrag(null)}
     reset()
   }
@@ -189,6 +208,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
         setManual(liveBox.current)
         if(start.current.handle||moving===start.current.partId){/* Move mode owns the whole selected Part, including edges. */}
         else if(start.current.refId)onReference?.(start.current.partId,start.current.refId)
+        else if(start.current.edge&&start.current.dimension)onDimension?.({partId:start.current.partId,edge:start.current.edge})
         else if(start.current.edge)onEdge({partId:start.current.partId,edge:start.current.edge})
         else onSelect(start.current.partId)
       }
@@ -205,23 +225,23 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
         const sign=polygonArea(points)>0?1:-1
         return <g key={shape.id} data-shape={shape.id} transform={'translate('+position.x+' '+position.y+')'}>
           <text x="0" y="-78" className="sm-part-title">{shape.name.length>36?shape.name.slice(0,35)+'…':shape.name}</text>
-          <text x="0" y="-57" className="sm-part-caption">{directMode?(item.guide?'FINISHED ? · not enough measured data / overhangs':'FINISHED countertop · '+(shape.basis==='cabinet'?'Cabinet + Overhang':'measured')):(item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements')}{shape.notes||shape.fieldRecords.length?' · notes / checks in Edit':''}</text>
+          <text x="0" y="-57" className="sm-part-caption">{directMode?(g.top?'Finished':'Finished · incomplete'):(item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements')}{!directMode&&(shape.notes||shape.fieldRecords.length)?' · notes / checks in Edit':''}</text>
           <path className={item.guide?'sm-template-guide':'sm-top'} data-selected={selected===shape.id} d={path(points)} role="button" tabIndex={0} aria-label={'Part '+shape.name} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(shape.id)}}}/>
           {shape.basis==='cabinet'&&g.base?<path className="sm-cabinet" d={path(g.base.map(local))}/>:null}
-          {item.guide?<text x={item.width/2} y={item.height/2} className="sm-guide-watermark" textAnchor="middle">MEASURE EDGES</text>:null}
+          {item.guide&&!directMode?<text x={item.width/2} y={item.height/2} className="sm-guide-watermark" textAnchor="middle">MEASURE EDGES</text>:null}
           {edgeOrder(shape).map((edge,i)=>{
             const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=sign*dy/len,ny=-sign*dx/len
             const offset=34,la={x:a.x+nx*offset,y:a.y+ny*offset},lb={x:b.x+nx*offset,y:b.y+ny*offset},mid={x:(la.x+lb.x)/2,y:(la.y+lb.y)/2}
             const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge
             // Cabinet measurements may be used to solve the outline, but must never be displayed as finished dimensions.
-            const n=g.top?edgeLength(shape,edge):shape.basis==='finished'?edgeLength(shape,edge,false):null
+            const n=directMode?finishedEdgeReading(shape,edge):(g.top?edgeLength(shape,edge):shape.basis==='finished'?edgeLength(shape,edge,false):null)
             return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active} data-treatment={treatmentOf(shape,edge)??"unset"}>
               <line className="sm-edge-highlight" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
               {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
-              <rect data-dimension="true" className="sm-label-bg" x={mid.x-52} y={mid.y-15} width="104" height="30" rx="6"/>
-              {directMode&&shape.profile==='vanity-step'?<text className="sm-direct-edge-name" x={mid.x} y={mid.y-21} textAnchor="middle">{({back:'總長',right:'淺位深度',front:'深位長度',left:'最深處',innerX:'淺位長度',innerY:'深淺差'} as Record<Edge,string>)[edge]}</text>:null}
-              <text className="sm-edge-value" x={mid.x} y={mid.y+6} textAnchor="middle">{n===null?(directMode?'✎ ?':'?'):formatLength(n,unit).replace('待量 / Unknown','?')}</text>
+              <rect data-dimension="true" className="sm-label-bg" x={mid.x-52} y={mid.y-15} width="104" height="30" rx="6" role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Edit finished dimension '+shape.name+' '+edge:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onDimension?.({partId:shape.id,edge})}}}/>
+
+              <text className="sm-edge-value" x={mid.x} y={mid.y+6} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
               {shape.fieldRecords.filter(r=>r.kind==='note'&&r.edge===edge&&r.text.trim()).slice(0,1).map(r=><text key={r.id} className="sm-direct-note-pin" textAnchor="middle" x={mid.x} y={mid.y+48}>{r.kind==='note'?'✎ '+r.text.slice(0,24)+(r.text.length>24?'…':''):''}</text>)}
               <line className="sm-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
             </g>
