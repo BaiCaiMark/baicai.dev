@@ -284,3 +284,8 @@
 - 主臥常是 Double Sink：面板內直接顯示 Sink 1、Sink 2 切換與 `＋ Sink`，新增第二盆不跳到 Advanced；上方 `＋ Sink` 也會新建獨立 reference，而不永遠重開第一盆；可在同一面板移除多餘 Sink（需再次確認）。
 - 畫布以 S1、S2 標示兩個中心的 X 讀數；有 X 無 Y 時，標記只放在示意位置（虛線），**不能冒充已量到 2D 真實坐標**。X 確認後可依左／右基準沿畫布 X 軸定位；資料不足時不產生虛假精確幾何。
 - JSON backup / Undo / PDF 保留每個 Sink 的獨立 X 原始輸入與 fromX；PDF 用 Sink 1、Sink 2 區分，未填 Y 不再報「Y unknown」。DXF 不因這些示意定位生成 Sink Cutout。Cooktop 保留原本完整 X/Y 操作與校驗。
+
+## 23. Part 名稱直接修改 + 在畫布保留 Cabinet 算式（2026-11-06）
+- 工地驗收：自動命名 `Rectangle 1` 不等於真正的 Bathroom/Ensuite/Vanity 名稱；使用者找不到改名位置。Canvas-first 預設把工具列的名稱變成帶 ✎ 的可點擊編輯入口，畫布上點 Part 標題也能直接改名；保留 Schema 的 120 字元限制、Undo/自動儲存/備份與所有輸出同步，不必再開進階 Part settings。Esc 取消，Enter / Done 儲存。
+- 畫布不能只顯示 Finished 總數而失去量尺過程。Rectangle 的上方主尺寸標籤顯示 Cabinet 與左右 Overhang 的簡潔加法（例如 `60 + 1`），結果仍大字顯示 `61″`；右側主深度標籤顯示 `21 + 1.5` 和 `22.5″`。兩側 0 已確認時自動省略，不可省略未知值；其餘重複邊僅顯示 Finished，避免畫面過度擁擠。所有算式從原始資料動態運算，不寫死數字。
+- 若值未知、輸入不合法、直接以 Finished 實測、或 L-shape 幾何具有不同加減語義，**不應顯示錯誤的簡單 Cabinet 加法**。PDF 原有的測量與算法記錄保留；不改 CNC 幾何。

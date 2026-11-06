@@ -3,18 +3,18 @@ import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type Rea
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
 import { sinkPin } from './sink-pin'
 import { edgeOrder, treatmentOf, value, type Area, type Edge } from '../core/model'
-import { edgeNames, edgeLength, finishedEdgeReading, worksheetLayout } from '../core/worksheet'
+import { edgeNames, edgeLength, finishedEdgeReading, finishedFormula, worksheetLayout } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
-type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; directMode?: boolean; unit: Unit; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
+type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; directMode?: boolean; unit: Unit; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
 const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
-export default function MeasureCanvas({ area, selected, selectedEdge, selectedReference, floatingEditor, directMode, unit, moving, toolbar, onSelect, onEdge, onDimension, onReference, onPlace }: Props) {
+export default function MeasureCanvas({ area, selected, selectedEdge, selectedReference, floatingEditor, directMode, unit, moving, toolbar, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
-  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;dimension:boolean;refId:string|null;position:Point|null;handle:boolean} | null>(null)
+  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;dimension:boolean;nameTap:boolean;refId:string|null;position:Point|null;handle:boolean} | null>(null)
   const moved = useRef(false)
   const [manual,setManual]=useState<Bounds|null>(null),[ratio,setRatio]=useState(1.8)
   const [canvasSize,setCanvasSize]=useState({width:1000,height:600})
@@ -134,9 +134,10 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
       const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??null
       let partId=target.closest('[data-shape]')?.getAttribute('data-shape')??null
       const dimension=!!directMode&&!!target.closest('[data-dimension]')
+      const nameTap=!!directMode&&!!target.closest('[data-part-title]')
       let edge=target.closest('[data-dimension]')?.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
       if(!edge&&target.closest('.sm-direct-edge-name,.sm-direct-note-pin'))edge=target.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
-      if(!handle&&!dimension&&!edge&&!refId){
+      if(!handle&&!dimension&&!edge&&!refId&&!nameTap){
         const candidates:ScreenEdge[]=[]
         // Resolve all nearby edges in screen space, independent of transparent stroke paint order.
         e.currentTarget.querySelectorAll<SVGLineElement>('.sm-edge-hit').forEach(line=>{
@@ -149,7 +150,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
         if(hit){partId=hit.partId;edge=hit.edge}
       }
       const item=layout.find(p=>p.shape.id===partId)
-      start.current={x:e.clientX,y:e.clientY,partId,edge,dimension,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
+      start.current={x:e.clientX,y:e.clientY,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
     }else{moved.current=true;start.current=null;liveDrag.current=null;setDrag(null)}
     reset()
   }
@@ -160,7 +161,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
     if(start.current&&Math.hypot(e.clientX-start.current.x,e.clientY-start.current.y)>7)moved.current=true
     if(!moved.current)return
     const dx=(now.center.x-base.center.x)*base.scale,dy=(now.center.y-base.center.y)*base.scale
-    if(pointers.current.size===1&&start.current?.partId&&!(directMode&&start.current.edge)){
+    if(pointers.current.size===1&&start.current?.partId&&!start.current.nameTap&&!(directMode&&start.current.edge)){
       // A selected part can be dragged directly from its interior. Edge taps keep measurement priority.
       if(start.current.refId||(!start.current.handle&&moving!==start.current.partId&&selected!==start.current.partId)||!start.current.position)return
       let moveX=dx,moveY=dy
@@ -208,6 +209,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
       else if(!moved.current&&start.current?.partId){
         setManual(liveBox.current)
         if(start.current.handle||moving===start.current.partId){/* Move mode owns the whole selected Part, including edges. */}
+        else if(start.current.nameTap)onRename?.(start.current.partId)
         else if(start.current.refId)onReference?.(start.current.partId,start.current.refId)
         else if(start.current.edge&&start.current.dimension)onDimension?.({partId:start.current.partId,edge:start.current.edge})
         else if(start.current.edge)onEdge({partId:start.current.partId,edge:start.current.edge})
@@ -218,15 +220,15 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
     reset()
   }
   const zoom=(factor:number)=>{const b=liveBox.current;setManual({x:b.x+b.width*(1-factor)/2,y:b.y+b.height*(1-factor)/2,width:b.width*factor,height:b.height*factor})}
-  return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving}>
+  return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving} data-direct={!!directMode}>
     <div className="sm-canvas-commandbar">{toolbar}<div className="sm-canvas-tools"><button aria-pressed={snapEnabled} onClick={()=>setSnapEnabled(v=>!v)} title="Align nearby part edges">Snap</button><button aria-pressed={orthoEnabled} onClick={()=>setOrthoEnabled(v=>!v)} title="Move strictly along one axis">Ortho</button><button onClick={()=>zoom(.8)} aria-label="Zoom in">＋</button><button onClick={()=>zoom(1.25)} aria-label="Zoom out">−</button><button onClick={()=>setManual(null)}>Fit All</button></div></div>
     <svg ref={svg} className="sm-canvas" aria-label={area.name+' measurement worksheet'} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
       {layout.map(item=>{
         const {shape,points,local}=item,position=drag?.id===shape.id?drag.position:{x:item.x,y:item.y},g=calculate(shape)
         const sign=polygonArea(points)>0?1:-1
         return <g key={shape.id} data-shape={shape.id} transform={'translate('+position.x+' '+position.y+')'}>
-          <text x="0" y="-78" className="sm-part-title">{shape.name.length>36?shape.name.slice(0,35)+'…':shape.name}</text>
-          <text x="0" y="-57" className="sm-part-caption">{directMode?(g.top?'Finished':'Finished · incomplete'):(item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements')}{!directMode&&(shape.notes||shape.fieldRecords.length)?' · notes / checks in Edit':''}</text>
+          <text x="0" y={directMode?"-110":"-78"} className="sm-part-title" data-part-title={directMode?'true':undefined} role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Rename part '+shape.name:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onRename?.(shape.id)}}}>{shape.name.length>36?shape.name.slice(0,35)+'…':shape.name}</text>
+          <text x="0" y={directMode?"-86":"-57"} className="sm-part-caption">{directMode?(g.top?'Finished':'Finished · incomplete'):(item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements')}{!directMode&&(shape.notes||shape.fieldRecords.length)?' · notes / checks in Edit':''}</text>
           <path className={item.guide?'sm-template-guide':'sm-top'} data-selected={selected===shape.id} d={path(points)} role="button" tabIndex={0} aria-label={'Part '+shape.name} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(shape.id)}}}/>
           {shape.basis==='cabinet'&&g.base?<path className="sm-cabinet" d={path(g.base.map(local))}/>:null}
           {item.guide&&!directMode?<text x={item.width/2} y={item.height/2} className="sm-guide-watermark" textAnchor="middle">MEASURE EDGES</text>:null}
@@ -236,13 +238,15 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
             const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge
             // Cabinet measurements may be used to solve the outline, but must never be displayed as finished dimensions.
             const n=directMode?finishedEdgeReading(shape,edge):(g.top?edgeLength(shape,edge):shape.basis==='finished'?edgeLength(shape,edge,false):null)
+            const formula=directMode?finishedFormula(shape,edge,unit):null
             return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active} data-treatment={treatmentOf(shape,edge)??"unset"}>
               <line className="sm-edge-highlight" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
               {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
-              <rect data-dimension="true" className="sm-label-bg" x={mid.x-52} y={mid.y-15} width="104" height="30" rx="6" role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Edit finished dimension '+shape.name+' '+edge:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onDimension?.({partId:shape.id,edge})}}}/>
+              <rect data-dimension="true" className="sm-label-bg" x={mid.x-(formula?72:52)} y={mid.y-(formula?24:15)} width={formula?144:104} height={formula?48:30} rx="6" role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Edit finished dimension '+shape.name+' '+edge:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onDimension?.({partId:shape.id,edge})}}}/>
 
-              <text className="sm-edge-value" x={mid.x} y={mid.y+6} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
+              {formula?<text className="sm-edge-formula" x={mid.x} y={mid.y-6} textAnchor="middle">{formula}</text>:null}
+              <text className="sm-edge-value" x={mid.x} y={mid.y+(formula?15:6)} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
               {shape.fieldRecords.filter(r=>r.kind==='note'&&r.edge===edge&&r.text.trim()).slice(0,1).map(r=><text key={r.id} className="sm-direct-note-pin" textAnchor="middle" x={mid.x} y={mid.y+48}>{r.kind==='note'?'✎ '+r.text.slice(0,24)+(r.text.length>24?'…':''):''}</text>)}
               <line className="sm-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
             </g>

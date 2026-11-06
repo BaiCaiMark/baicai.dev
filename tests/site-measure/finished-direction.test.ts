@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { applyCanvasOpenDefaults, newProject, newShape, newReference, quantity, type Edge } from '../../app/tools/site-measure/core/model'
 import { calculate, measurementRows, referenceGeometry } from '../../app/tools/site-measure/core/geometry'
-import { dimensionTerms, finishedEdgeReading } from '../../app/tools/site-measure/core/worksheet'
+import { dimensionTerms, finishedEdgeReading, finishedFormula } from '../../app/tools/site-measure/core/worksheet'
 import { formatLength } from '../../app/tools/site-measure/core/units'
 
 test('rectangle finished direction appears immediately even before the other axis is measured',()=>{
@@ -69,4 +69,20 @@ test('two independent sink centers retain X-only left/right readings without dem
     assert.ok(marker.lines.length>0)
     assert.ok(!marker.warnings.some(x=>x.includes('Y unknown')))
   }
+})
+
+test('visual dimension arithmetic uses real input, hides zero offsets and never invents the opposite edge',()=>{
+  const p=newProject(),s=newShape('rectangle','in')
+  applyCanvasOpenDefaults(s,p)
+  s.dimensions.width=quantity('60');s.dimensions.height=quantity('21')
+  s.allowances.right=quantity('1','in','allowance')
+  assert.equal(finishedFormula(s,'back','in'),'60 + 1')
+  assert.equal(finishedFormula(s,'right','in'),'21 + 1.5')
+  assert.equal(finishedFormula(s,'front','in'),null)
+  assert.equal(finishedFormula(s,'left','in'),null)
+  s.allowances.right=quantity('0','in','allowance')
+  assert.equal(finishedFormula(s,'back','in'),null)
+  s.dimensions.width=quantity('')
+  assert.equal(finishedFormula(s,'back','in'),null)
+  assert.equal(finishedFormula(s,'right','in'),'21 + 1.5')
 })

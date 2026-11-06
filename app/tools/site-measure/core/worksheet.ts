@@ -1,6 +1,6 @@
 import { bounds, calculate, transformPoint, type Point } from './geometry'
 import { edgeOrder, value, type Edge, type Param, type Shape } from './model'
-import { formatLength, type Unit } from './units'
+import { formatLength, numeric, type Unit } from './units'
 
 export const edgeNames: Record<Edge, string> = {
   back: 'Back run', right: 'Right end', front: 'Front edge', left: 'Left back run',
@@ -68,6 +68,22 @@ export function finishedEdgeReading(shape: Shape, edge: Edge): number | null {
       result=h-a+amount('front')!-amount('innerX')!
   }
   return result!==null&&Number.isFinite(result)&&result>0?result:null
+}
+/** Small arithmetic annotation for the primary length/depth labels only.
+ * This is a reading of real cabinet + overhang values, not a second geometry model.
+ */
+export function finishedFormula(shape: Shape, edge: Edge, unit: Unit): string | null {
+  if (shape.template!=='rectangle' || shape.basis!=='cabinet' || (edge!=='back'&&edge!=='right')) return null
+  const terms=dimensionTerms(shape,edge)
+  if(!terms?.parameter || finishedEdgeReading(shape,edge)===null) return null
+  const parts=[shape.dimensions[terms.parameter],shape.allowances[terms.start],shape.allowances[terms.end]]
+  const numbers=parts.map(q=>value(q))
+  if(numbers.some(n=>n===null)) return null
+  const show=(i:number)=>parts[i].unit===unit?parts[i].input.trim().replace(/[″”"]$/,'').trim():numeric(numbers[i]!,unit)
+  const ingredients=[show(0)]
+  if(numbers[1]!>0)ingredients.push(show(1))
+  if(numbers[2]!>0)ingredients.push(show(2))
+  return ingredients.length>1?ingredients.join(' + '):null
 }
 export function edgeLength(shape: Shape, edge: Edge, finished = true): number | null {
   const g = calculate(shape), outline = finished ? g.top : g.base

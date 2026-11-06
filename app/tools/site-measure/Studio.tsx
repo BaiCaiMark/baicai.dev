@@ -36,6 +36,8 @@ export default function Studio() {
   const [directMode,setDirectMode] = useState(false), [activeRef,setActiveRef] = useState<string|null>(null), [dimensionMode,setDimensionMode] = useState(false)
   useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
+  const [renameId,setRenameId] = useState<string|null>(null), [renameDraft,setRenameDraft] = useState('')
+  const renameCancelled=useRef(false)
   const [exportOpen, setExportOpen] = useState(false), [defaultsOpen, setDefaultsOpen] = useState(false)
   const db = useRef<ProjectStore | null>(null), versions = useRef(new Map<string, number>())
   const latest = useRef(project), saved = useRef(new Map<string, Project>()), chain = useRef<Promise<unknown>>(Promise.resolve())
@@ -96,7 +98,7 @@ export default function Studio() {
     if (!forceCopy && latest.current && !(await persist(latest.current))) return
     if (version !== undefined) { versions.current.set(p.id, version); saved.current.set(p.id, p) }
     setAreaId(p.areas[0].id); setShapeId(p.areas[0].shapes[0]?.id ?? null)
-    setMoving(null);setDeleteTarget(null);setPartMessage('');setActiveRef(null);setDimensionMode(false)
+    setMoving(null);setDeleteTarget(null);setPartMessage('');setActiveRef(null);setDimensionMode(false);setRenameId(null)
     setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
     setSavedProject(version === undefined ? null : p)
     dispatch({ type: 'load', project: p })
@@ -146,6 +148,22 @@ export default function Studio() {
     setMoving(null);setDeleteTarget(null);setPartMessage('')
   }
   const selectPart = (id:string,openEditor=false) => {end();setShapeId(id);setSelectedEdge(null);setActiveRef(null);setDimensionMode(false);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
+  const beginRename=(id:string)=>{
+    const item=area?.shapes.find(s=>s.id===id)
+    if(!item)return
+    end();setShapeId(id);setRenameDraft(item.name);setRenameId(id);renameCancelled.current=false
+    setSelectedEdge(null);setActiveRef(null);setPanelOpen(false);setMoving(null)
+  }
+  const finishRename=()=>{
+    if(!renameCancelled.current&&area&&renameId){
+      const next=renameDraft.trim().slice(0,120)
+      if(next&&area.shapes.find(s=>s.id===renameId)?.name!==next){
+        edit(p=>{const s=p.areas.find(a=>a.id===area.id)?.shapes.find(s=>s.id===renameId);if(s)s.name=next})
+        end()
+      }
+    }
+    renameCancelled.current=false;setRenameId(null)
+  }
   const addSinkDirect=()=>{
     if(!shape||!project)return
     if(shape.references.length>=30)return
@@ -203,7 +221,11 @@ export default function Studio() {
           <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
             floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?(dimensionMode?<CanvasDimensionEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>{setSelectedEdge(null);setDimensionMode(false)}}/>:<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):activeRef?(shape.references.find(r=>r.id===activeRef)?.kind==='sink'?<CanvasSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):null):null}
             toolbar={shape?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
-              <strong title={shape.name}>{shape.name}</strong>
+              {renameId===shape.id?
+                <><input className="sm-inline-part-name" aria-label="Part name" autoFocus value={renameDraft} maxLength={120} onChange={e=>setRenameDraft(e.target.value)}
+                  onBlur={finishRename} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.blur()}else if(e.key==='Escape'){renameCancelled.current=true;e.currentTarget.blur()}}}/>
+                  <button type="button" aria-label="Save part name" onPointerDown={e=>e.preventDefault()} onClick={finishRename}>Done</button></>
+                :<button type="button" className="sm-part-rename" aria-label={'Rename '+shape.name} onClick={()=>beginRename(shape.id)}><span className="sm-rename-text">{shape.name}</span> <span className="sm-rename-pencil" aria-hidden="true">✎</span></button>}
               {deleteTarget===shape.id?<><span>Delete this part?</span><button className="sm-danger" onClick={removePart}>Delete part</button><button onClick={()=>setDeleteTarget(null)}>Cancel deletion</button></>:<>
                 <button onClick={()=>{end();setMoving(null);setPanelOpen(true);setSelectedEdge(null);setActiveRef(null);setAdvanced(false)}}>{directMode?'欄位設定':'Measure'}</button>
                 {directMode?<button onClick={addSinkDirect}>＋ Sink</button>:null}
@@ -216,6 +238,7 @@ export default function Studio() {
               </>}
             </div>:null}
             onSelect={id=>selectPart(id,!directMode)}
+            onRename={beginRename}
             onEdge={selection=>{end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(false);setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false);setMoving(null);setDeleteTarget(null)}}
             onDimension={selection=>{end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(true);setActiveRef(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}
             onReference={(partId,refId)=>{end();setShapeId(partId);setActiveRef(refId);setSelectedEdge(null);setDimensionMode(false);setPanelOpen(!directMode);setAdvanced(true);setMoving(null);setDeleteTarget(null)}}
