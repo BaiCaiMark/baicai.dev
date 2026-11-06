@@ -95,11 +95,11 @@ test('sink center remains directly editable',async({page})=>{
   await page.getByRole('button',{name:'＋ Sink',exact:true}).click()
   const editor=page.locator('.sm-direct-editor')
   await expect(editor).toContainText('Sink Center')
-  await editor.getByRole('textbox',{name:'Sink from left/right'}).fill('30')
-  await editor.getByRole('textbox',{name:'Sink from back/front'}).fill('11')
+  await editor.getByRole('textbox',{name:'Sink Center distance'}).fill('30')
+  await expect(editor.getByRole('textbox',{name:/Sink.*Y/})).toHaveCount(0)
   await close(page)
-  await page.getByRole('button',{name:'Edit Sink Center location'}).press('Enter')
-  await expect(editor.getByRole('textbox',{name:'Sink from left/right'})).toHaveValue('30')
+  await page.locator('[data-sink-ref]').first().press('Enter')
+  await expect(editor.getByRole('textbox',{name:'Sink Center distance'})).toHaveValue('30')
 })
 
 test('portrait tablet keeps dimension editor next to tapped label',async({page})=>{

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { applyCanvasOpenDefaults, newProject, newShape, quantity, type Edge } from '../../app/tools/site-measure/core/model'
-import { calculate } from '../../app/tools/site-measure/core/geometry'
+import { applyCanvasOpenDefaults, newProject, newShape, newReference, quantity, type Edge } from '../../app/tools/site-measure/core/model'
+import { calculate, measurementRows, referenceGeometry } from '../../app/tools/site-measure/core/geometry'
 import { dimensionTerms, finishedEdgeReading } from '../../app/tools/site-measure/core/worksheet'
 import { formatLength } from '../../app/tools/site-measure/core/units'
 
@@ -45,4 +45,28 @@ test('L independent directional formulas agree with true finished polygon under 
   }
   assert.deepEqual(dimensionTerms(s,'front'),{parameter:'legY',start:'left',end:'innerY',endSign:-1})
   assert.equal(dimensionTerms(s,'innerX'),null)
+})
+
+test('two independent sink centers retain X-only left/right readings without demanding Y',()=>{
+  const project=newProject(),s=newShape('rectangle','in')
+  applyCanvasOpenDefaults(s,project)
+  s.dimensions.width=quantity('60');s.dimensions.height=quantity('21')
+  const left=newReference('sink','in');left.fromX='left';left.x=quantity('15')
+  const right=newReference('sink','in');right.fromX='right';right.x=quantity('15')
+  s.references.push(left,right)
+  const rows=measurementRows(s,'in')
+  const first=rows.find(r=>r.label.startsWith('Sink 1 Center'))
+  const second=rows.find(r=>r.label.startsWith('Sink 2 Center'))
+  assert.ok(first?.text.includes('X from left 15'))
+  assert.ok(second?.text.includes('X from right 15'))
+  assert.ok(!first?.text.includes('Y '))
+  assert.ok(!second?.text.includes('Y '))
+  assert.equal(left.y.input,'')
+  assert.equal(right.y.input,'')
+  for(const ref of s.references){
+    const marker=referenceGeometry(ref,s,calculate(s))
+    assert.equal(marker.point,null)
+    assert.ok(marker.lines.length>0)
+    assert.ok(!marker.warnings.some(x=>x.includes('Y unknown')))
+  }
 })

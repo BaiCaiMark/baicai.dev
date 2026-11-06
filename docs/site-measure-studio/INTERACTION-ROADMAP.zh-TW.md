@@ -278,3 +278,9 @@
 - 圖紙移除自動加上的中文「總長/最深處/深淺差」標籤；只留下尺寸數字與使用者自己的 Note。直接模式移除冗餘 Move 工具列按鈕，仍可以拖動選中的 Part。
 - L-shape 保持四個獨立控制尺寸；內凹邊的計算尺寸只讀，方向算式由 `dimensionTerms` 綁定幾何而非依外觀猜測。
 - Classic / main 的操作暫不替換。用戶驗收後再評估是否成為預設。
+
+## 22. Bathroom Vanity 的 Sink Center 改為 X-only、雙盆直接編輯（2026-11-06）
+- 現場實際流程：量 Sink Center 只需「距左邊或右邊多少」，通常**不量前後 Y**。原先硬顯示 X/Y 是反直覺表單。直接輸入模式預設僅顯示 Left / Right 和一個距離，Y 不再需要填寫，且空白 Y 不被視為遺漏必填；仍由 Advanced 保留特殊需求。
+- 主臥常是 Double Sink：面板內直接顯示 Sink 1、Sink 2 切換與 `＋ Sink`，新增第二盆不跳到 Advanced；上方 `＋ Sink` 也會新建獨立 reference，而不永遠重開第一盆；可在同一面板移除多餘 Sink（需再次確認）。
+- 畫布以 S1、S2 標示兩個中心的 X 讀數；有 X 無 Y 時，標記只放在示意位置（虛線），**不能冒充已量到 2D 真實坐標**。X 確認後可依左／右基準沿畫布 X 軸定位；資料不足時不產生虛假精確幾何。
+- JSON backup / Undo / PDF 保留每個 Sink 的獨立 X 原始輸入與 fromX；PDF 用 Sink 1、Sink 2 區分，未填 Y 不再報「Y unknown」。DXF 不因這些示意定位生成 Sink Cutout。Cooktop 保留原本完整 X/Y 操作與校驗。

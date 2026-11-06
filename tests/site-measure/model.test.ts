@@ -94,7 +94,7 @@ for (const rotation of [0, 90, 180, 270] as const) for (const mirrored of [false
 test('sink X only creates reference line, no center point or Y', () => {
   const s = sampleProject().areas[1].shapes[0], g = calculate(s), r = referenceGeometry(s.references[0], s, g)
   assert.equal(r.point, null); assert.equal(r.lines[0].a.x, 762); assert.equal(r.lines[0].b.x, 762)
-  assert.match(r.warnings.join(), /Y unknown/)
+  assert.doesNotMatch(r.warnings.join(), /Y unknown/) // sink Y is optional in the field worksheet
 })
 test('reference supports right/front direction and cabinet basis', () => {
   const s = sampleProject().areas[1].shapes[0], r = s.references[0]

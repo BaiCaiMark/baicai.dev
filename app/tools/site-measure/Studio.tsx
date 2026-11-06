@@ -4,6 +4,7 @@ import MeasureCanvas from './components/MeasureCanvas'
 import PartEditor from './components/PartEditor'
 import QuickMeasurePanel from './components/QuickMeasurePanel'
 import { DirectEdgeEditor, DirectSinkEditor } from './components/CanvasDirectEditor'
+import CanvasSinkEditor from './components/CanvasSinkEditor'
 import CanvasDimensionEditor from './components/CanvasDimensionEditor'
 import OfflineStatus from './OfflineStatus'
 import QuantityField from './components/QuantityField'
@@ -147,9 +148,9 @@ export default function Studio() {
   const selectPart = (id:string,openEditor=false) => {end();setShapeId(id);setSelectedEdge(null);setActiveRef(null);setDimensionMode(false);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
   const addSinkDirect=()=>{
     if(!shape||!project)return
-    const existing=shape.references.find(r=>r.kind==='sink')
-    const ref=existing??newReference('sink',project.unit)
-    if(!existing){if(shape.references.length>=30)return;editShape(s=>s.references.push(ref))}
+    if(shape.references.length>=30)return
+    const ref=newReference('sink',project.unit)
+    editShape(s=>s.references.push(ref))
     setSelectedEdge(null);setActiveRef(ref.id);setDimensionMode(false);setPanelOpen(false);setMoving(null);end()
   }
   const duplicatePart = () => {
@@ -200,7 +201,7 @@ export default function Studio() {
           <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button><details className="sm-template-picker"><summary>＋ Vanity Step</summary><div className="sm-template-picker-options"><p>Stepped bathroom vanity · choose the full-depth side.</p><button onClick={e=>{addShape('vanity-step-left');e.currentTarget.closest('details')!.open=false}}>Deep Left</button><button onClick={e=>{addShape('vanity-step-right');e.currentTarget.closest('details')!.open=false}}>Deep Right</button></div></details></div></div>
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
           <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
-            floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?(dimensionMode?<CanvasDimensionEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>{setSelectedEdge(null);setDimensionMode(false)}}/>:<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):activeRef?<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:null):null}
+            floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?(dimensionMode?<CanvasDimensionEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>{setSelectedEdge(null);setDimensionMode(false)}}/>:<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):activeRef?(shape.references.find(r=>r.id===activeRef)?.kind==='sink'?<CanvasSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):null):null}
             toolbar={shape?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
               <strong title={shape.name}>{shape.name}</strong>
               {deleteTarget===shape.id?<><span>Delete this part?</span><button className="sm-danger" onClick={removePart}>Delete part</button><button onClick={()=>setDeleteTarget(null)}>Cancel deletion</button></>:<>

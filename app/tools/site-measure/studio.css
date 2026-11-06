@@ -193,3 +193,19 @@ html[data-theme="dark"] .sm-studio{--sm-bg:#172820;--sm-paper:#21372c;--sm-ink:#
 .sm-dimension-editor .sm-direct-bottom{margin-top:8px}
 .sm-canvas-shell .sm-label-bg[data-dimension="true"]{cursor:pointer}
 .sm-canvas-shell .sm-label-bg[data-dimension="true"]:focus{stroke:var(--sm-green);stroke-width:2}
+
+/* Quick on-canvas sink reference: X from Left/Right, no required front/back measurement. */
+.sm-sink-editor{min-height:0}
+.sm-sink-tabs{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 12px}
+.sm-sink-editor .sm-sink-tabs button{min-height:42px;padding:6px 12px;font-size:12px}
+.sm-sink-position{display:grid;grid-template-columns:minmax(92px,1fr) minmax(95px,1.3fr) auto;gap:8px;align-items:end}
+.sm-sink-position label{display:block;font-size:11px;color:var(--sm-muted);font-weight:650;margin:0 0 5px}
+.sm-sink-editor .sm-sink-position select{width:100%;min-height:48px;padding:6px;font-size:15px}
+.sm-sink-editor .sm-sink-position input{width:100%;min-width:0;min-height:48px;padding:6px;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.sm-sink-unit{font-size:10px;color:var(--sm-muted);align-self:end;margin-bottom:16px}
+.sm-sink-helper{font-size:11px;color:var(--sm-muted);margin:9px 0 0!important}
+.sm-sink-actions,.sm-sink-remove-confirm{display:flex;justify-content:space-between;align-items:center;gap:5px;margin-top:10px}
+.sm-sink-editor .sm-sink-actions button,.sm-sink-editor .sm-sink-remove-confirm button{min-height:38px;padding:5px 9px;font-size:11px}
+.sm-sink-remove-confirm{padding:7px;background:var(--sm-soft);border-radius:6px}
+.sm-sink-remove-confirm span{font-size:11px}
+.sm-direct-sink-pin[data-x-only="true"] rect{stroke-dasharray:4 3;stroke-width:1.5;fill:var(--sm-paper)}

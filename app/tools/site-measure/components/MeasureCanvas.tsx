@@ -1,6 +1,7 @@
 'use client'
 import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
+import { sinkPin } from './sink-pin'
 import { edgeOrder, treatmentOf, value, type Area, type Edge } from '../core/model'
 import { edgeNames, edgeLength, finishedEdgeReading, worksheetLayout } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
@@ -251,17 +252,18 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
             return <g key={ref.id} className="sm-reference">
               {rg.lines.map((l,i)=>{const a=local(l.a),b=local(l.b);return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>})}
               {rg.point?<circle cx={local(rg.point).x} cy={local(rg.point).y} r="5"/>:null}
-              {rg.lines[0]?<text x={local(rg.lines[0].a).x+8} y={local(rg.lines[0].a).y+24}>{ref.kind==='sink'?'Sink Center':'Cooktop'}{value(ref.y)===null?' · Y unknown':value(ref.x)===null?' · X unknown':''}</text>:null}
+              {rg.lines[0]&&(!directMode||ref.kind!=='sink')?<text x={local(rg.lines[0].a).x+8} y={local(rg.lines[0].a).y+24}>{ref.kind==='sink'?'Sink Center':'Cooktop'}{value(ref.y)===null?' · Y unknown':value(ref.x)===null?' · X unknown':''}</text>:null}
             </g>
           }):null}
           {shape.references.map(ref=>{
             const rg=g.top?referenceGeometry(ref,shape,g):null
-            const point=rg?.point?local(rg.point):{x:item.width*.5,y:item.height*.5}
-            const positioned=!!rg?.point
-            return <g key={'pin-'+ref.id} className="sm-direct-sink-pin" data-sink-ref={ref.id} transform={'translate('+point.x+' '+point.y+')'} role="button" tabIndex={0}
+            const point=rg?.point?local(rg.point):ref.kind==='sink'?sinkPin(ref,shape,g,local,item.width,item.height):{x:item.width*.5,y:item.height*.5}
+            const positioned=ref.kind==='sink'?value(ref.x)!==null:!!rg?.point
+            const sinkNumber=shape.references.filter(r=>r.kind==='sink').findIndex(r=>r.id===ref.id)+1
+            return <g key={'pin-'+ref.id} className="sm-direct-sink-pin" data-sink-ref={ref.id} data-x-only={ref.kind==='sink'&&value(ref.y)===null} transform={'translate('+point.x+' '+point.y+')'} role="button" tabIndex={0}
               aria-label={'Edit '+(ref.kind==='sink'?'Sink Center':'Cooktop')+' location'} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onReference?.(shape.id,ref.id)}}}>
               <rect x="-38" y="-18" width="76" height="36" rx="8"/>
-              <text textAnchor="middle" y="5">{ref.kind==='sink'?'Sink':'Cooktop'}{positioned?'':' ?'}</text>
+              <text textAnchor="middle" y="5">{ref.kind==='sink'?'S'+sinkNumber+' '+(positioned?formatLength(value(ref.x),unit):'?'):'Cooktop'}{ref.kind==='sink'?'':positioned?'':' ?'}</text>
             </g>
           })}
           {selected===shape.id&&!directMode?<g data-move-handle="true" className="sm-move-handle" role="button" tabIndex={0} aria-label={'Drag '+shape.name} transform={'translate('+(item.width+30*screenScale)+' '+(-55*screenScale)+') scale('+screenScale+')'} onKeyDown={e=>{
