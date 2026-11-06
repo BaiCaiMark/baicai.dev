@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { edgeControl, edgeLength } from '../core/worksheet'
 import { formatLength, numeric, parseLength } from '../core/units'
-import { quantity, setTreatment, treatmentOf, uid, value, type Edge, type Project, type Reference, type Shape, type Treatment, type Quantity } from '../core/model'
+import { quantity, setEdgeOpen, setTreatment, treatmentOf, uid, value, type Edge, type Project, type Reference, type Shape, type Treatment, type Quantity } from '../core/model'
 
 const names:Record<Edge,string>={back:'後邊 Back',right:'右邊 Right',front:'前邊 Front',left:'左邊 Left',innerX:'內側橫邊',innerY:'內側直邊'}
 const vanity:Record<Edge,string>={back:'總長 · Overall length',right:'淺位深度 · Shallow depth',front:'深位長度 · Deep run',left:'最深處 · Max depth',innerX:'淺位長度 · Shallow run',innerY:'深淺差 · Step'}
@@ -23,11 +23,11 @@ export function DirectEdgeEditor({project,shape,edge,onChange,onEnd,onClose,onAd
   const control=edgeControl(shape,edge),param=control.parameter
   const name=shape.profile==='vanity-step'?vanity[edge]:names[edge]
   const read=param?shape.dimensions[param]:null
-  const allowance=shape.allowances[edge],treatment=treatmentOf(shape,edge)
+  const allowance=shape.allowances[edge],treatment=treatmentOf(shape,edge),edgeOpen=shape.openEdges?.[edge]
   const note=shape.fieldRecords.findLast(r=>r.kind==='note'&&r.edge===edge)
   const options=project.unit==='in'
-    ? (edge==='front'||edge==='innerX'?['0','1/8','1 1/2','1 3/4']:['0','1/8','1/2','3/4','1'])
-    : (edge==='front'||edge==='innerX'?['0','3.175','38.1','44.45']:['0','3.175','12.7','19.05','25.4'])
+    ? (edge==='front'||edge==='innerX'?['1.5','1.75','1','0','1/2','3/4','1/8']:['1','1.5','1/2','3/4','0','1/8'])
+    : (edge==='front'||edge==='innerX'?['38.1','44.45','25.4','0','12.7','19.05','3.175']:['25.4','38.1','12.7','19.05','0','3.175'])
   const editAllowance=(input:string)=>{onChange(s=>{s.allowances[edge]=quantity(input,project.unit,'allowance')},shape.id+edge);onEnd()}
   const editTreatment=(kind:Treatment)=>{onChange(s=>setTreatment(s,edge,kind,project));onEnd()}
   const addNote=()=>{
@@ -41,7 +41,11 @@ export function DirectEdgeEditor({project,shape,edge,onChange,onEnd,onClose,onAd
       {shortInput(read,project.unit,'Cabinet '+name,text=>onChange(s=>{s.dimensions[param]=quantity(text,project.unit,'measured')},shape.id+param),onEnd,true)}
       <span>{project.unit==='in'?'inch':'mm'}</span></div>
       :<p className="sm-direct-derived">這段是計算邊：{formatLength(edgeLength(shape,edge),project.unit)}。請修改圖上其他實測邊。</p>}
-    {shape.basis==='cabinet'?<div className="sm-direct-allowance"><div className="sm-direct-label"><strong>Overhang</strong><span>{allowance.origin==='default'?'預設 · 未確認':'現場修改'}</span></div>
+    {shape.basis==='cabinet'?<div className="sm-direct-allowance">
+      <div className="sm-direct-open" aria-label={name+' exposed edge'}>
+        <strong>這條邊是否 OPEN？</strong><div><button type="button" aria-pressed={edgeOpen===true} onClick={()=>{onChange(s=>setEdgeOpen(s,edge,true,project));onEnd()}}>OPEN</button><button type="button" aria-pressed={edgeOpen===false} onClick={()=>{onChange(s=>setEdgeOpen(s,edge,false,project));onEnd()}}>Not OPEN</button></div>
+      </div>
+      <div className="sm-direct-label"><strong>Overhang <small>{edge==='front'||edge==='innerX'?'Front OPEN → 1.5″':'Side OPEN → 1″'}</small></strong><span>{allowance.origin==='default'?'預設 · 未確認':'現場修改'}</span></div>
       <div className="sm-direct-chips" aria-label={name+' overhang'}>
         {options.map(n=><button key={n} aria-pressed={value(allowance)===value(quantity(n,project.unit))} onClick={()=>{setCustom(false);editAllowance(n)}}>{n}{project.unit==='in'?'″':''}</button>)}
         <button aria-pressed={custom} onClick={()=>setCustom(v=>!v)}>自訂</button>

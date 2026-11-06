@@ -140,7 +140,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
     if(start.current&&Math.hypot(e.clientX-start.current.x,e.clientY-start.current.y)>7)moved.current=true
     if(!moved.current)return
     const dx=(now.center.x-base.center.x)*base.scale,dy=(now.center.y-base.center.y)*base.scale
-    if(pointers.current.size===1&&start.current?.partId){
+    if(pointers.current.size===1&&start.current?.partId&&!(directMode&&start.current.edge)){
       // A selected part can be dragged directly from its interior. Edge taps keep measurement priority.
       if(start.current.refId||(!start.current.handle&&moving!==start.current.partId&&selected!==start.current.partId)||!start.current.position)return
       let moveX=dx,moveY=dy
@@ -205,14 +205,16 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
         const sign=polygonArea(points)>0?1:-1
         return <g key={shape.id} data-shape={shape.id} transform={'translate('+position.x+' '+position.y+')'}>
           <text x="0" y="-78" className="sm-part-title">{shape.name.length>36?shape.name.slice(0,35)+'…':shape.name}</text>
-          <text x="0" y="-57" className="sm-part-caption">{item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements'}{shape.notes||shape.fieldRecords.length?' · notes / checks in Edit':''}</text>
+          <text x="0" y="-57" className="sm-part-caption">{directMode?(item.guide?'FINISHED ? · not enough measured data / overhangs':'FINISHED countertop · '+(shape.basis==='cabinet'?'Cabinet + Overhang':'measured')):(item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements')}{shape.notes||shape.fieldRecords.length?' · notes / checks in Edit':''}</text>
           <path className={item.guide?'sm-template-guide':'sm-top'} data-selected={selected===shape.id} d={path(points)} role="button" tabIndex={0} aria-label={'Part '+shape.name} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(shape.id)}}}/>
           {shape.basis==='cabinet'&&g.base?<path className="sm-cabinet" d={path(g.base.map(local))}/>:null}
           {item.guide?<text x={item.width/2} y={item.height/2} className="sm-guide-watermark" textAnchor="middle">MEASURE EDGES</text>:null}
           {edgeOrder(shape).map((edge,i)=>{
             const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=sign*dy/len,ny=-sign*dx/len
             const offset=34,la={x:a.x+nx*offset,y:a.y+ny*offset},lb={x:b.x+nx*offset,y:b.y+ny*offset},mid={x:(la.x+lb.x)/2,y:(la.y+lb.y)/2}
-            const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge,n=edgeLength(shape,edge,!!g.top)
+            const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge
+            // Cabinet measurements may be used to solve the outline, but must never be displayed as finished dimensions.
+            const n=g.top?edgeLength(shape,edge):shape.basis==='finished'?edgeLength(shape,edge,false):null
             return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active} data-treatment={treatmentOf(shape,edge)??"unset"}>
               <line className="sm-edge-highlight" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
@@ -242,7 +244,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
               <text textAnchor="middle" y="5">{ref.kind==='sink'?'Sink':'Cooktop'}{positioned?'':' ?'}</text>
             </g>
           })}
-          {selected===shape.id?<g data-move-handle="true" className="sm-move-handle" role="button" tabIndex={0} aria-label={'Drag '+shape.name} transform={'translate('+(item.width+30*screenScale)+' '+(-55*screenScale)+') scale('+screenScale+')'} onKeyDown={e=>{
+          {selected===shape.id&&!directMode?<g data-move-handle="true" className="sm-move-handle" role="button" tabIndex={0} aria-label={'Drag '+shape.name} transform={'translate('+(item.width+30*screenScale)+' '+(-55*screenScale)+') scale('+screenScale+')'} onKeyDown={e=>{
             const direction=({ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1}} as Record<string,Point>)[e.key]
             if(direction){e.preventDefault();setManual(liveBox.current);const step=(e.shiftKey?40:10)*screenScale;onPlace(shape.id,{x:Math.max(-10000,Math.min(10000,item.x+direction.x*step)),y:Math.max(-10000,Math.min(10000,item.y+direction.y*step))})}
           }}><title>Drag to move · arrow keys also work</title><rect x="-22" y="-22" width="44" height="44" rx="10"/><path d="M-12 0H12M0-12V12M-12 0l4-4M-12 0l4 4M12 0l-4-4M12 0l-4 4M0-12l-4 4M0-12l4 4M0 12l-4-4M0 12l4-4"/></g>:null}

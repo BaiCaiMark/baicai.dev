@@ -8,7 +8,7 @@ import OfflineStatus from './OfflineStatus'
 import QuantityField from './components/QuantityField'
 import { calculate, exportSnapshot } from './core/geometry'
 import { historyReducer, initialHistory } from './core/history'
-import { applyRectangleQuickDefaults, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
+import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
 import type { Unit } from './core/units'
@@ -137,6 +137,7 @@ export default function Studio() {
       ? newVanityStep(project, template === 'vanity-step-left' ? 'left' : 'right', area.shapes.length + 1)
       : newShape(template as Shape['template'], project.unit, area.shapes.length + 1)
     applyRectangleQuickDefaults(s,project)
+    if(directMode) applyCanvasOpenDefaults(s,project)
     const existing = worksheetLayout(area.shapes)
     s.layout = {x:100,y:Math.min(10000,Math.max(-90,...existing.map(p=>p.y+p.height))+200)}
     edit(p => { p.areas.find(a => a.id === area.id)!.shapes.push(s) }); setShapeId(s.id); setSelectedEdge(null); setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false)
@@ -204,6 +205,7 @@ export default function Studio() {
               {deleteTarget===shape.id?<><span>Delete this part?</span><button className="sm-danger" onClick={removePart}>Delete part</button><button onClick={()=>setDeleteTarget(null)}>Cancel deletion</button></>:<>
                 <button onClick={()=>{end();setMoving(null);setPanelOpen(true);setSelectedEdge(null);setActiveRef(null);setAdvanced(false)}}>{directMode?'欄位設定':'Measure'}</button>
                 {directMode?<button onClick={addSinkDirect}>＋ Sink</button>:null}
+                {directMode&&shape.basis==='cabinet'&&!shape.openEdges?<button onClick={()=>{editShape(s=>applyCanvasOpenDefaults(s,project));end();setPanelOpen(false)}}>套用 OPEN 預設</button>:null}
                 <button aria-pressed={moving===shape.id} onClick={()=>{end();setMoving(moving===shape.id?null:shape.id);setPanelOpen(false);setSelectedEdge(null)}}>{moving===shape.id?'Done moving':'Move'}</button>
                 <button aria-pressed={shape.mirrored} onClick={()=>{editShape(s=>{s.mirrored=!s.mirrored});setMoving(null)}}>Mirror</button>
                 <button onClick={()=>{editShape(s=>{s.rotation=((s.rotation+90)%360) as Shape['rotation']});setMoving(null)}}>Rotate</button>

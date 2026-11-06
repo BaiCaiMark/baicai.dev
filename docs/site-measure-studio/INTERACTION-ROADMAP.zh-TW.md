@@ -259,3 +259,11 @@
 - 選擇 Part 後按 `＋ Sink`，畫布出現 Sink 定位標記及 X/Y 快速輸入；尚未量到的定位會以問號表示，不假造 Sink Cutout。
 - 原表單留在 `欄位設定` / `更多設定`，平常不必開；一般連結先保持 Classic，待使用者 Android 真機驗收，再決定是否讓 Canvas-first 成為預設。
 - 未包含任意牆線手繪、任意位置 Notes、精確局部截面、Waterfall 幾何補償。牆偏斜仍只是 Note；不宣稱可直接 CNC。
+
+## 20. 工地反饋修正：Finished、OPEN + 1½″ 與 Move handle（2026-11-06）
+- 以 Canvas-first 模式為首要驗收對象。畫布數字的語義**一律為 Finished Countertop 尺寸**；Cabinet 量測值只在直接編輯器中輸入/核對。尚未算出完整 Finished 時，圖上標成「? / FINISHED ?」，禁止退回顯示 Cabinet 尺寸冒充成品。
+- 新建 Canvas-first Rectangle：Front OPEN 預設 Front Overhang 1.5″；非 OPEN 邊 0。新建 Canvas-first L/Vanity Step：兩條朝前的水平邊 `front`、`innerX` 預設 OPEN 及 1.5″；其餘非 OPEN 預設 0。預設來源是 `default / unconfirmed`，絕非現場已確認尺寸。
+- 畫布點任一條邊直接選 OPEN / Not OPEN（與 Polish、Miter 分開記錄），OPEN 自動套用對應專案 Overhang 預設（前邊 1.5″、側邊 1″）；Not OPEN 預設 0；保護手動輸入的 Custom 值，不能因切換 OPEN 而覆蓋。每條邊均提供顯眼的 1.5″ 快選，不再要求使用者重複鍵盤輸入。
+- 已存在的舊 L 工程若沒有 OPEN 資料，提供一次性的「套用 OPEN 預設」入口，手動 Custom allowance 不改。
+- Canvas-first 移除圖形右上角的十字 Move handle；Part 內部直接拖曳即移動，邊線點擊繼續優先進入尺寸編輯；Classic 暫維持原功能以保留回歸比較。
+- 保持局限：這是現場量尺示意工具；未完整量得的輪廓不能稱為可 CNC 的精確 finished 檯面。

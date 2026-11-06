@@ -45,6 +45,8 @@ export const shapeSchema = z.object({
   fieldRecords: z.array(fieldRecordSchema).max(80).default([]),
   // Optional for schema-v2 backups created before quick edge treatment was introduced.
   treatments: z.partialRecord(edgeSchema, treatmentSchema).optional(),
+  // OPEN is a physical/visibility decision, separate from Polish and Overhang.
+  openEdges: z.partialRecord(edgeSchema, z.boolean()).optional(),
   layout: z.object({x:z.number().finite().min(-10000).max(10000),y:z.number().finite().min(-10000).max(10000)}).strict().optional(),
 }).strict()
 const currentProjectSchema = z.object({
@@ -141,6 +143,8 @@ export function setTreatment(shape: Shape, edge: Edge, treatment: Treatment, pro
   const previous = shape.treatments[edge]
   shape.treatments[edge] = treatment
   if (previous === treatment) return
+  // Once an explicit OPEN decision exists, treatment and allowance stay independent.
+  if (shape.openEdges?.[edge] !== undefined) return
   const existing = shape.allowances[edge]
   if (existing.input.trim() && existing.origin !== 'default') return
   if (treatment === 'miter') {
@@ -165,6 +169,27 @@ export function applyRectangleQuickDefaults(shape: Shape, project: Project): voi
     const preset = edge === 'front' ? project.defaults.front : quantity('0', project.unit, 'default')
     shape.allowances[edge] = {...preset,origin:'default',status:'unconfirmed',defaultRevision:project.defaults.revision}
   }
+}
+// Canvas-first defaults are suggestions only; never silently replace a measured or custom value.
+export function setEdgeOpen(shape: Shape, edge: Edge, open: boolean, project: Project): void {
+  const previousOpen = shape.openEdges?.[edge]
+  const existing = shape.allowances[edge]
+  const autoValue = !existing.input.trim() || existing.origin === 'default'
+  const previousTreatment = shape.treatments?.[edge]
+  shape.openEdges ??= {}
+  shape.openEdges[edge] = open
+  if (autoValue) {
+    const preset = open ? (edge === 'front' || edge === 'innerX' ? project.defaults.front : project.defaults.end) : quantity('0', project.unit, 'default')
+    shape.allowances[edge] = { ...preset, origin: 'default', status: 'unconfirmed', defaultRevision: project.defaults.revision }
+  }
+  shape.treatments ??= {}
+  // Preserve Miter and independently chosen treatments. Auto-follow only while the allowance is still a preset.
+  if (!previousTreatment || (autoValue && previousOpen !== undefined && previousTreatment === (previousOpen ? 'polish' : 'no-polish')))
+    shape.treatments[edge] = open ? 'polish' : 'no-polish'
+}
+export function applyCanvasOpenDefaults(shape: Shape, project: Project): void {
+  if (shape.openEdges) return
+  for (const edge of edgeOrder(shape)) setEdgeOpen(shape, edge, edge === 'front' || (shape.template === 'l' && edge === 'innerX'), project)
 }
 export function applyDefault(shape: Shape, edge: Edge, project: Project, kind: 'end' | 'front'): Shape {
   return { ...shape, allowances: { ...shape.allowances, [edge]: { ...project.defaults[kind], origin: 'default', defaultRevision: project.defaults.revision } } }

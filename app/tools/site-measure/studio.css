@@ -169,3 +169,10 @@ html[data-theme="dark"] .sm-studio{--sm-bg:#172820;--sm-paper:#21372c;--sm-ink:#
  .sm-direct-editor .sm-direct-chips button{min-height:44px}
  .sm-direct-editor header strong{font-size:14px}
 }
+
+/* OPEN is a field choice distinct from the treatment applied to that edge. */
+.sm-direct-open{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:6px 0 9px;border-bottom:1px solid var(--sm-line)}
+.sm-direct-open>strong{font-size:11px}
+.sm-direct-open>div{display:flex;gap:5px}
+.sm-direct-editor .sm-direct-open button{min-height:42px;padding:6px 10px;font-size:12px}
+.sm-direct-label strong small{display:inline-block;margin-left:4px;color:var(--sm-muted);font-size:9px;font-weight:500}
