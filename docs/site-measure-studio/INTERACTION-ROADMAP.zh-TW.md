@@ -250,3 +250,12 @@
 - 選中 Part 內部直接拖動；Snap On/Off 與 Ortho On/Off （Snap 視覺引導線、智慧 Anchor 等仍待後續調整）。
 - 保持既有 JSON schema v2 可以讀取舊工程；原有 PDF／DXF output 及 IndexedDB 保護；新 PDF 記錄 Treatment，但不憑 Treatment 假造加工幾何。
 - 必須通過 core、瀏覽器與 build，先發 Preview，再合併 main。原 Preview origin 資料不會自動出現在 production origin，需備份／匯入。
+
+## 19. Canvas-first 互動原型（2026-11-05，先在 Preview 使用 `?direct=1`）
+- 工地驗收的首要阻礙不是缺少功能，而是開啟 Vanity 後必須理解「總長/最深/淺位/深位寬」等 List 欄位。單純翻譯不會解決問題。
+- 本輪做成**可比較的原型**：開啟 `/tools/site-measure?direct=1`，新建 Rectangle 或 Vanity Step 後**不彈出列表**；逐條點選畫布上的邊，在圖上出現極短的尺寸輸入框、Overhang 快捷鈕與 No Polish / Polish / Miter。每條邊的實測值仍進同一套嚴格幾何計算。
+- 階梯 Vanity 的四條控制邊直接在圖面標上「總長」「最深處」「淺位深度」「深位長度」，其餘兩條為根據四數得出的計算邊，不假冒獨立實測。
+- 邊上可以加短 Note（例：左牆斜 1/4″）；記錄仍與該邊綁定，文字以黃色 Note 標記顯示在畫布上，PDF / backup 維持原有 fieldRecords 路徑。
+- 選擇 Part 後按 `＋ Sink`，畫布出現 Sink 定位標記及 X/Y 快速輸入；尚未量到的定位會以問號表示，不假造 Sink Cutout。
+- 原表單留在 `欄位設定` / `更多設定`，平常不必開；一般連結先保持 Classic，待使用者 Android 真機驗收，再決定是否讓 Canvas-first 成為預設。
+- 未包含任意牆線手繪、任意位置 Notes、精確局部截面、Waterfall 幾何補償。牆偏斜仍只是 Note；不宣稱可直接 CNC。

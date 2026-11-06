@@ -3,11 +3,12 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, 
 import MeasureCanvas from './components/MeasureCanvas'
 import PartEditor from './components/PartEditor'
 import QuickMeasurePanel from './components/QuickMeasurePanel'
+import { DirectEdgeEditor, DirectSinkEditor } from './components/CanvasDirectEditor'
 import OfflineStatus from './OfflineStatus'
 import QuantityField from './components/QuantityField'
 import { calculate, exportSnapshot } from './core/geometry'
 import { historyReducer, initialHistory } from './core/history'
-import { applyRectangleQuickDefaults, duplicateShape, importCopy, newProject, newShape, newVanityStep, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
+import { applyRectangleQuickDefaults, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
 import type { Unit } from './core/units'
@@ -30,6 +31,8 @@ export default function Studio() {
   const [saveState, setSaveState] = useState('No project open'), [error, setError] = useState('')
   const [busy, setBusy] = useState(false), [download, setDownload] = useState<Download | null>(null)
   const [panelOpen,setPanelOpen] = useState(false), [selectedEdge,setSelectedEdge] = useState<Edge | null>(null), [advanced,setAdvanced] = useState(false)
+  const [directMode,setDirectMode] = useState(false), [activeRef,setActiveRef] = useState<string|null>(null)
+  useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
   const [exportOpen, setExportOpen] = useState(false), [defaultsOpen, setDefaultsOpen] = useState(false)
   const db = useRef<ProjectStore | null>(null), versions = useRef(new Map<string, number>())
@@ -91,7 +94,7 @@ export default function Studio() {
     if (!forceCopy && latest.current && !(await persist(latest.current))) return
     if (version !== undefined) { versions.current.set(p.id, version); saved.current.set(p.id, p) }
     setAreaId(p.areas[0].id); setShapeId(p.areas[0].shapes[0]?.id ?? null)
-    setMoving(null);setDeleteTarget(null);setPartMessage('')
+    setMoving(null);setDeleteTarget(null);setPartMessage('');setActiveRef(null)
     setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
     setSavedProject(version === undefined ? null : p)
     dispatch({ type: 'load', project: p })
@@ -136,10 +139,17 @@ export default function Studio() {
     applyRectangleQuickDefaults(s,project)
     const existing = worksheetLayout(area.shapes)
     s.layout = {x:100,y:Math.min(10000,Math.max(-90,...existing.map(p=>p.y+p.height))+200)}
-    edit(p => { p.areas.find(a => a.id === area.id)!.shapes.push(s) }); setShapeId(s.id); setSelectedEdge(null); setPanelOpen(true);setAdvanced(false)
+    edit(p => { p.areas.find(a => a.id === area.id)!.shapes.push(s) }); setShapeId(s.id); setSelectedEdge(null); setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false)
     setMoving(null);setDeleteTarget(null);setPartMessage('')
   }
-  const selectPart = (id:string,openEditor=false) => {end();setShapeId(id);setSelectedEdge(null);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
+  const selectPart = (id:string,openEditor=false) => {end();setShapeId(id);setSelectedEdge(null);setActiveRef(null);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
+  const addSinkDirect=()=>{
+    if(!shape||!project)return
+    const existing=shape.references.find(r=>r.kind==='sink')
+    const ref=existing??newReference('sink',project.unit)
+    if(!existing){if(shape.references.length>=30)return;editShape(s=>s.references.push(ref))}
+    setSelectedEdge(null);setActiveRef(ref.id);setPanelOpen(false);setMoving(null);end()
+  }
   const duplicatePart = () => {
     if(!shape||!area||!project)return
     if(area.shapes.length>=60||project.areas.reduce((n,a)=>n+a.shapes.length,0)>=200){setError('Limit: 60 parts per area, 200 per project');return}
@@ -159,6 +169,7 @@ export default function Studio() {
     <header className="sm-heading"><div><p className="sm-eyebrow">FIELD WORKSHEET · QUICK MEASURE BETA</p><h1>Site Measure Studio</h1></div><span className="sm-local-pill">Local projects · no account needed</span></header>
     <div className="sm-toolbar">
       <OfflineStatus />
+      {project?<button className="sm-direct-switch" aria-pressed={directMode} onClick={()=>{end();setDirectMode(v=>!v);setPanelOpen(false);setSelectedEdge(null);setActiveRef(null)}}>{directMode?'✎ 圖上輸入 · ON':'✎ 試用圖上輸入'}</button>:null}
       <details className="sm-project-menu"><summary>Project</summary><div className="sm-project-popover">
         <button disabled={!ready} onClick={()=>void switchProject(newProject())}>New project</button><button disabled={!ready} onClick={()=>void switchProject(worksheetSample())}>Open sample worksheet</button><button onClick={()=>importer.current?.click()}>Import backup as a copy</button>
         <h2>Saved in this browser</h2>{projects.map(p=><button key={p.id} onClick={()=>void open(p.id)}>{p.name}<small>{new Date(p.updatedAt).toLocaleString()}</small></button>)}
@@ -186,11 +197,13 @@ export default function Studio() {
         <div className="sm-area-heading"><details className="sm-area-settings"><summary>{area.name} <span>▾</span></summary><div><label>Area name<input aria-label="Area name" maxLength={120} value={area.name} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.name=e.target.value||'Unnamed area'},'area-name')} onBlur={end}/></label><label>Area notes<textarea aria-label="Area notes" maxLength={4000} value={area.notes} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.notes=e.target.value},'area-notes')} onBlur={end}/></label></div></details>
           <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button><details className="sm-template-picker"><summary>＋ Vanity Step</summary><div className="sm-template-picker-options"><p>Stepped bathroom vanity · choose the full-depth side.</p><button onClick={e=>{addShape('vanity-step-left');e.currentTarget.closest('details')!.open=false}}>Deep Left</button><button onClick={e=>{addShape('vanity-step-right');e.currentTarget.closest('details')!.open=false}}>Deep Right</button></div></details></div></div>
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
-          <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} unit={project.unit} moving={moving===shape?.id?moving:null}
+          <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
+            floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:activeRef?<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:null):null}
             toolbar={shape?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
               <strong title={shape.name}>{shape.name}</strong>
               {deleteTarget===shape.id?<><span>Delete this part?</span><button className="sm-danger" onClick={removePart}>Delete part</button><button onClick={()=>setDeleteTarget(null)}>Cancel deletion</button></>:<>
-                <button onClick={()=>{end();setMoving(null);setPanelOpen(true);setSelectedEdge(null);setAdvanced(false)}}>Measure</button>
+                <button onClick={()=>{end();setMoving(null);setPanelOpen(true);setSelectedEdge(null);setActiveRef(null);setAdvanced(false)}}>{directMode?'欄位設定':'Measure'}</button>
+                {directMode?<button onClick={addSinkDirect}>＋ Sink</button>:null}
                 <button aria-pressed={moving===shape.id} onClick={()=>{end();setMoving(moving===shape.id?null:shape.id);setPanelOpen(false);setSelectedEdge(null)}}>{moving===shape.id?'Done moving':'Move'}</button>
                 <button aria-pressed={shape.mirrored} onClick={()=>{editShape(s=>{s.mirrored=!s.mirrored});setMoving(null)}}>Mirror</button>
                 <button onClick={()=>{editShape(s=>{s.rotation=((s.rotation+90)%360) as Shape['rotation']});setMoving(null)}}>Rotate</button>
@@ -198,8 +211,9 @@ export default function Studio() {
                 <button onClick={()=>{setDeleteTarget(shape.id);setPanelOpen(false);setMoving(null)}}>Delete</button>
               </>}
             </div>:null}
-            onSelect={id=>selectPart(id,true)}
-            onEdge={selection=>{end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setPanelOpen(true);setAdvanced(false);setMoving(null);setDeleteTarget(null)}}
+            onSelect={id=>selectPart(id,!directMode)}
+            onEdge={selection=>{end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false);setMoving(null);setDeleteTarget(null)}}
+            onReference={(partId,refId)=>{end();setShapeId(partId);setActiveRef(refId);setSelectedEdge(null);setPanelOpen(!directMode);setAdvanced(true);setMoving(null);setDeleteTarget(null)}}
             onPlace={(id,position)=>edit(p=>{p.areas.find(a=>a.id===area.id)!.shapes.find(s=>s.id===id)!.layout=position})}/>
           {panelOpen&&shape?(advanced?<PartEditor key={shape.id+(selectedEdge??'part')} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onRemove={()=>{setDeleteTarget(shape.id);setPanelOpen(false);setMoving(null)}} onClose={()=>{end();setPanelOpen(false);setSelectedEdge(null)}}/>:<QuickMeasurePanel key={shape.id+(selectedEdge??'part')} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onDetails={()=>setAdvanced(true)} onClose={()=>{end();setPanelOpen(false);setSelectedEdge(null)}}/>):null}
         </div>
