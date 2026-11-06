@@ -115,6 +115,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
       const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??null
       let partId=target.closest('[data-shape]')?.getAttribute('data-shape')??null
       let edge=target.closest('[data-dimension]')?.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
+      if(!edge&&target.closest('.sm-direct-edge-name,.sm-direct-note-pin'))edge=target.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
       if(!handle&&!edge&&!refId){
         const candidates:ScreenEdge[]=[]
         // Resolve all nearby edges in screen space, independent of transparent stroke paint order.
@@ -218,7 +219,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
               {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
               <rect data-dimension="true" className="sm-label-bg" x={mid.x-52} y={mid.y-15} width="104" height="30" rx="6"/>
               {directMode&&shape.profile==='vanity-step'?<text className="sm-direct-edge-name" x={mid.x} y={mid.y-21} textAnchor="middle">{({back:'總長',right:'淺位深度',front:'深位長度',left:'最深處',innerX:'淺位長度',innerY:'深淺差'} as Record<Edge,string>)[edge]}</text>:null}
-              <text className="sm-edge-value" x={mid.x} y={mid.y+6} textAnchor="middle">{n===null?'✎ ?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
+              <text className="sm-edge-value" x={mid.x} y={mid.y+6} textAnchor="middle">{n===null?(directMode?'✎ ?':'?'):formatLength(n,unit).replace('待量 / Unknown','?')}</text>
               {shape.fieldRecords.filter(r=>r.kind==='note'&&r.edge===edge&&r.text.trim()).slice(0,1).map(r=><text key={r.id} className="sm-direct-note-pin" textAnchor="middle" x={mid.x} y={mid.y+48}>{r.kind==='note'?'✎ '+r.text.slice(0,24)+(r.text.length>24?'…':''):''}</text>)}
               <line className="sm-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
             </g>
