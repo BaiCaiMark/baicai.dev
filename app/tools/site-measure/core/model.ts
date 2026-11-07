@@ -120,6 +120,23 @@ export function newProject(): Project {
     areas: [{ id: uid(), name: 'Kitchen', notes: '', shapes: [] }],
   }
 }
+/** Human-readable field part names are numbered within their room (Area), not by geometry type.
+ * Existing custom names remain untouched; the next index follows the highest matching suffix.
+ */
+export function nextPartNameForArea(area: Area): string {
+  const prefix = area.name.trim() || 'Area'
+  const stem = prefix.toLocaleLowerCase() + ' '
+  let highest = 0
+  for (const part of area.shapes) {
+    const text = part.name.trim().toLocaleLowerCase()
+    if (!text.startsWith(stem)) continue
+    const suffix = text.slice(stem.length)
+    if (!/^[1-9][0-9]*$/.test(suffix)) continue
+    const number = Number(suffix)
+    if (Number.isSafeInteger(number)) highest = Math.max(highest, number)
+  }
+  return prefix + ' ' + (highest + 1)
+}
 export function newReference(kind: Reference['kind'], unit: Unit): Reference {
   return { id: uid(), kind, basis: 'countertop', fromX: 'left', fromY: 'back', x: quantity('', unit), y: quantity('', unit) }
 }

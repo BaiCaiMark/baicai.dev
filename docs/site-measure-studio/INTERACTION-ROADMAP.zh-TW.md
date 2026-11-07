@@ -289,3 +289,11 @@
 - 工地驗收：自動命名 `Rectangle 1` 不等於真正的 Bathroom/Ensuite/Vanity 名稱；使用者找不到改名位置。Canvas-first 預設把工具列的名稱變成帶 ✎ 的可點擊編輯入口，畫布上點 Part 標題也能直接改名；保留 Schema 的 120 字元限制、Undo/自動儲存/備份與所有輸出同步，不必再開進階 Part settings。Esc 取消，Enter / Done 儲存。
 - 畫布不能只顯示 Finished 總數而失去量尺過程。Rectangle 的上方主尺寸標籤顯示 Cabinet 與左右 Overhang 的簡潔加法（例如 `60 + 1`），結果仍大字顯示 `61″`；右側主深度標籤顯示 `21 + 1.5` 和 `22.5″`。兩側 0 已確認時自動省略，不可省略未知值；其餘重複邊僅顯示 Finished，避免畫面過度擁擠。所有算式從原始資料動態運算，不寫死數字。
 - 若值未知、輸入不合法、直接以 Finished 實測、或 L-shape 幾何具有不同加減語義，**不應顯示錯誤的簡單 Cabinet 加法**。PDF 原有的測量與算法記錄保留；不改 CNC 幾何。
+
+## 24. Room / Area 主導的 Part 自動命名（2026-11-07）
+- 現場使用者指出：既然已有 Room / Area，沒有必要新增每一片時看到 `Rectangle 1`、`L-shape 1` 再手動改名。
+- Canvas-first Preview 的新建 Part 依目前 Area 名稱自動命名。同一個 Kitchen 區域內，不論 Rectangle / L / Vanity Step，順序是 Kitchen 1、Kitchen 2；在新建且已命名為 Bathroom 的 Area 內，從 Bathroom 1、Bathroom 2 獨立開始。
+- 新增 Part 時按該區域**現有同前綴數字的最大值 +1**，不按幾何形狀分組；Room 改名後只影響後續新 Part，不重新命名已有工程或使用者自訂名稱。手動 ✎ Rename 仍保留。
+- `＋ Area` 目前仍會先建立 `Area N`，可從 Room 標題下拉改名為 Bathroom、Ensuite、Kitchen 等；未改名時新 Part 會依 `Area N` 命名。這輪不重設使用者已儲存的 Room/Part。
+- 小修正：修改 Area name 後若下拉設定仍開著，按新增 Part 會自動收合 Area 設定，避免覆蓋新 Part 的工具列。
+- 為保留比較和既有經典回歸，此規則先只在 `?direct=1` Canvas-first Preview 運作；Classic 暫沿用原形狀名稱。

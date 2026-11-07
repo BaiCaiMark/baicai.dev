@@ -10,7 +10,7 @@ import OfflineStatus from './OfflineStatus'
 import QuantityField from './components/QuantityField'
 import { calculate, exportSnapshot } from './core/geometry'
 import { historyReducer, initialHistory } from './core/history'
-import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
+import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, nextPartNameForArea, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
 import type { Unit } from './core/units'
@@ -43,6 +43,7 @@ export default function Studio() {
   const latest = useRef(project), saved = useRef(new Map<string, Project>()), chain = useRef<Promise<unknown>>(Promise.resolve())
   useLayoutEffect(() => { latest.current = project }, [project])
   const importer = useRef<HTMLInputElement>(null)
+  const areaDetails = useRef<HTMLDetailsElement>(null)
   const area = project?.areas.find(a => a.id === areaId) ?? project?.areas[0]
   const shape = area?.shapes.find(s => s.id === shapeId)
   const end = () => dispatch({ type: 'end' })
@@ -136,10 +137,12 @@ export default function Studio() {
   }
   const addShape = (template: Shape['template'] | 'vanity-step-left' | 'vanity-step-right') => {
     if (!area || !project) return
+    areaDetails.current?.removeAttribute('open')
     if (area.shapes.length >= 60 || project.areas.reduce((n, a) => n + a.shapes.length, 0) >= 200) { setError('Limit: 60 parts per area, 200 per project'); return }
     const s = template.startsWith('vanity-step-')
       ? newVanityStep(project, template === 'vanity-step-left' ? 'left' : 'right', area.shapes.length + 1)
       : newShape(template as Shape['template'], project.unit, area.shapes.length + 1)
+    if(directMode)s.name=nextPartNameForArea(area)
     applyRectangleQuickDefaults(s,project)
     if(directMode) applyCanvasOpenDefaults(s,project)
     const existing = worksheetLayout(area.shapes)
@@ -215,7 +218,7 @@ export default function Studio() {
       {defaultsOpen?<section className="sm-defaults"><div><h2>Project overhang defaults</h2><p>Apply only to a named edge. Changing these values does not change existing parts.</p></div>{(['end','front'] as const).map(key=><QuantityField key={key} label={key==='end'?'Typical end overhang':'Typical front overhang'} quantity={project.defaults[key]} unit={project.unit} allowance onEnd={end} onChange={q=>edit(p=>{p.defaults[key]=q;p.defaults.revision++},'default-'+key)}/>)}</section>:null}
       <div className="sm-area-bar"><div className="sm-area-tabs" aria-label="Areas">{project.areas.map(a=><button key={a.id} aria-pressed={area?.id===a.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'')}}>{a.name}<span>{a.shapes.length} parts</span></button>)}</div><button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}>＋ Area</button></div>
       {area?<>
-        <div className="sm-area-heading"><details className="sm-area-settings"><summary>{area.name} <span>▾</span></summary><div><label>Area name<input aria-label="Area name" maxLength={120} value={area.name} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.name=e.target.value||'Unnamed area'},'area-name')} onBlur={end}/></label><label>Area notes<textarea aria-label="Area notes" maxLength={4000} value={area.notes} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.notes=e.target.value},'area-notes')} onBlur={end}/></label></div></details>
+        <div className="sm-area-heading"><details ref={areaDetails} className="sm-area-settings"><summary>{area.name} <span>▾</span></summary><div><label>Area name<input aria-label="Area name" maxLength={120} value={area.name} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.name=e.target.value||'Unnamed area'},'area-name')} onBlur={end}/></label><label>Area notes<textarea aria-label="Area notes" maxLength={4000} value={area.notes} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.notes=e.target.value},'area-notes')} onBlur={end}/></label></div></details>
           <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button><details className="sm-template-picker"><summary>＋ Vanity Step</summary><div className="sm-template-picker-options"><p>Stepped bathroom vanity · choose the full-depth side.</p><button onClick={e=>{addShape('vanity-step-left');e.currentTarget.closest('details')!.open=false}}>Deep Left</button><button onClick={e=>{addShape('vanity-step-right');e.currentTarget.closest('details')!.open=false}}>Deep Right</button></div></details></div></div>
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
           <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
