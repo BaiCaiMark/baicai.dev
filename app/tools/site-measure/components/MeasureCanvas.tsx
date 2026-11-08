@@ -2,6 +2,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
 import { sinkPin } from './sink-pin'
+import { dimensionLabelLayout } from './dimension-label'
 import { edgeOrder, treatmentOf, value, type Area, type Edge } from '../core/model'
 import { projectCanvasItems } from '../core/project-canvas'
 import { edgeNames, edgeLength, finishedEdgeReading, finishedFormula } from '../core/worksheet'
@@ -281,17 +282,24 @@ export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, se
             // Cabinet measurements may be used to solve the outline, but must never be displayed as finished dimensions.
             const n=directMode?finishedEdgeReading(shape,edge):(g.top?edgeLength(shape,edge):shape.basis==='finished'?edgeLength(shape,edge,false):null)
             const formula=directMode?finishedFormula(shape,edge,unit):null
+            const label=dimensionLabelLayout(a,b,!!formula)
+            const labelCenter={x:mid.x+nx*label.lift,y:mid.y+ny*label.lift}
+            const radians=label.angle*Math.PI/180
+            const noteSide=nx*(-Math.sin(radians))+ny*Math.cos(radians)>=0?1:-1
             return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active} data-treatment={treatmentOf(shape,edge)??"unset"}>
               <line className="sm-edge-selection-halo" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-edge-highlight" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
               {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
-              <rect data-dimension="true" className="sm-label-bg" x={mid.x-(formula?72:52)} y={mid.y-(formula?24:15)} width={formula?144:104} height={formula?48:30} rx="6" role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Edit finished dimension '+shape.name+' '+edge:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onDimension?.({partId:shape.id,edge})}}}/>
-
-              {formula?<text className="sm-edge-formula" x={mid.x} y={mid.y-6} textAnchor="middle">{formula}</text>:null}
-              <text className="sm-edge-value" x={mid.x} y={mid.y+(formula?15:6)} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
-              {shape.fieldRecords.filter(r=>r.kind==='note'&&r.edge===edge&&r.text.trim()).slice(0,1).map(r=><text key={r.id} className="sm-direct-note-pin" textAnchor="middle" x={mid.x} y={mid.y+48}>{r.kind==='note'?'✎ '+r.text.slice(0,24)+(r.text.length>24?'…':''):''}</text>)}
               <line className="sm-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
+              {label.lift>0?<line className="sm-dimension-leader" x1={mid.x} y1={mid.y} x2={labelCenter.x} y2={labelCenter.y}/>:null}
+              <g className="sm-dimension-label" data-dimension-label="true" data-label-angle={label.angle} data-short-edge={label.lift>0}
+                transform={'translate('+labelCenter.x+' '+labelCenter.y+') rotate('+label.angle+')'}>
+                <rect data-dimension="true" className="sm-label-bg" x={-label.width/2} y={-label.height/2} width={label.width} height={label.height} rx="6" role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Edit finished dimension '+shape.name+' '+edge:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onDimension?.({partId:shape.id,edge})}}}/>
+                {formula?<text className="sm-edge-formula" x="0" y="-6" textAnchor="middle">{formula}</text>:null}
+                <text className="sm-edge-value" x="0" y={formula?15:6} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
+                {shape.fieldRecords.filter(r=>r.kind==='note'&&r.edge===edge&&r.text.trim()).slice(0,1).map(r=><text key={r.id} className="sm-direct-note-pin" textAnchor="middle" x="0" y={noteSide*(label.height/2+31)}>{r.kind==='note'?'✎ '+r.text.slice(0,24)+(r.text.length>24?'…':''):''}</text>)}
+              </g>
             </g>
           })}
           {g.top?shape.references.map(ref=>{

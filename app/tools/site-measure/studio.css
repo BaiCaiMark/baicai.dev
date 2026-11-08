@@ -191,6 +191,8 @@ html[data-theme="dark"] .sm-studio{--sm-bg:#172820;--sm-paper:#21372c;--sm-ink:#
 .sm-dimension-finished{display:grid;gap:6px}.sm-dimension-finished>label{font-size:12px;font-weight:650}
 .sm-dimension-editor{min-height:0}
 .sm-dimension-editor .sm-direct-bottom{margin-top:8px}
+.sm-dimension-leader{stroke:var(--sm-muted);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke;pointer-events:none}
+.sm-dimension-label{isolation:isolate}
 .sm-canvas-shell .sm-label-bg[data-dimension="true"]{cursor:pointer}
 .sm-canvas-shell .sm-label-bg[data-dimension="true"]:focus{stroke:var(--sm-green);stroke-width:2}
 

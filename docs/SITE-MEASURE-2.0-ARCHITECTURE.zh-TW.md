@@ -74,3 +74,16 @@
 - 所有功能留在 `feat/site-measure-v2-immersive` Preview，不合併 `main`；現場資料應保留 JSON Backup。若需要回退，可使用 Preview 分支前一提交，舊工程 schemaVersion 2 仍可讀（新 `canvasLayout` 欄位需在回退前從備份移除或使用當前分支重新開啟）。
 
 **下一步**：P2 iPhone 真機確認連續 Paint 手感；P3.2 將 Room 真正變成可選 Part metadata，完善建立 Room／改分類／全案 overview 的 UX；再做尺寸標籤沿線旋轉與自動可讀翻轉。PDF 現場交付優先，DXF 的切割幾何仍由 True Form Studio／AutoCAD 驗證。
+
+## P4.1 · Dimension labels on the canvas（2026-11-07 · V2 Preview）
+
+- 現場量尺優先：不增加 Room／Part 管理層級，直接改善尺寸的閱讀及點擊體驗。
+- `components/dimension-label.ts` 為純視覺函式：依 SVG 線段方向計算文字角度，控制落在 [-90°, 90°)，任何反向邊線都不會把文字倒過來。
+- Dimension background、公式、Finished 值與第一則 Edge Note 共同依邊線方向排列。Edge Note 向幾何外側排列。
+- 短於標籤寬度（含安全邊距）的邊，把標籤向外移開並加虛線 leader；不更改已量尺寸，不宣稱外推位置為實測座標。
+- 將可點選的尺寸卡放在透明 Edge Hit Corridor 上層，手機能直接點標註開啟 Dimension Editor；點線段仍由原有 Edge/Paint 行為處理。
+- 99/99 核心測試、11/11 P1/P2/P3/P4 相關 Chromium 測試通過；TypeScript、ESLint、Next.js build 通過。
+- `schemaVersion`、IndexedDB 格式、`exportSnapshot`、PDF/DXF 的數值與製造幾何均不變。
+- 保持 Preview 分支 `feat/site-measure-v2-immersive`，不合併 `main`；實機 iPhone／Android 平板的手勢、標籤重疊及長公式仍待人手驗收。
+
+**後續優先**：P4.2 完善長公式、短邊與相鄰 Part 標籤避讓；P4.3 現場自由 Note／偏移牆線的語義與 PDF，始終區分示意線與可用於 CNC 的實測幾何。Room 仍維持可選輔助分類，不應阻擋第一次量尺。
