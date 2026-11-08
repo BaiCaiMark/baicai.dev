@@ -383,6 +383,8 @@ html.sm-v2-open .site-header,html.sm-v2-open .site-footer,html.sm-v2-open .skip-
 
 /* P5.1: Field-only Canvas Notes; never mark these as surveyed outlines. */
 .sm-canvas-note-leader{stroke:#b5792d;stroke-width:1.8;stroke-dasharray:7 4;vector-effect:non-scaling-stroke;pointer-events:none}
+.sm-canvas-note-leader-hit{stroke:transparent;stroke-width:44;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:pointer}
+.sm-canvas-note-leader-hit:focus{stroke:#b5792d44;stroke-width:20}
 .sm-canvas-note-target{fill:#fff9ec;stroke:#b5792d;stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:none}
 .sm-canvas-note-card{cursor:grab}
 .sm-canvas-note-card rect{fill:#fff7e8;stroke:#aa752f;stroke-width:1.4}

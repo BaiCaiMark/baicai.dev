@@ -194,7 +194,7 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
       }
       const item=layout.find(p=>p.shape.id===partId)
       if(partId)lastBlankTap.current=null
-      start.current={x:e.clientX,y:e.clientY,noteId,notePosition:note?{x:note.x,y:note.y}:null,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
+      start.current={x:e.clientX,y:e.clientY,noteId,notePosition:note&&!!target.closest('.sm-canvas-note-card')?{x:note.x,y:note.y}:null,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
     }else{moved.current=true;start.current=null;lastBlankTap.current=null;liveDrag.current=null;setDrag(null);liveNoteDrag.current=null;setNoteDrag(null)}
     reset()
   }
@@ -352,6 +352,9 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
         const height=noteCardHeight(note.text)
         return <g key={note.id} data-canvas-note={note.id} className="sm-canvas-note" data-selected={note.id===selectedCanvasNoteId}>
           <line className="sm-canvas-note-leader" x1={note.targetX} y1={note.targetY} x2={here.x+10} y2={here.y+height/2}/>
+          <line className="sm-canvas-note-leader-hit" data-note-leader-hit="true" x1={note.targetX} y1={note.targetY} x2={here.x+10} y2={here.y+height/2}
+            role="button" tabIndex={0} aria-label={'Edit note from leader '+note.text.slice(0,45)}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();onSelectCanvasNote(note.id)}}}/>
           <circle className="sm-canvas-note-target" cx={note.targetX} cy={note.targetY} r="7"/>
           <g className="sm-canvas-note-card" transform={'translate('+here.x+' '+here.y+')'} role="button" tabIndex={0} aria-label={'Edit canvas note '+note.text.slice(0,45)}
             onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();onSelectCanvasNote(note.id)}}}>
