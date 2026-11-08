@@ -1,0 +1,61 @@
+# Site Measure Studio 2.0 — Workspace 與跨平台決策
+
+更新：2026-11-07 · Phase 1 工程草案
+
+## 產品方向
+
+「模板是起點，不是限制。」（Start with a template. Work without limits.）
+
+- 工程（Project）是一張主要的無邊際畫布；各 Part 在相同座標系自由擺放。
+- Room / Area 僅為可選 metadata，不是強制切換的獨立畫布。
+- 工作區沉浸式：工作頁佔滿可用 viewport，沒有網站導覽、Footer 或內外雙重捲動。
+- 手機操作優先：單指拖曳空白處平移；雙指以手指中點縮放；點尺寸進行編輯；需要時才浮出操作。
+- 尺寸與 Edge note 跟隨幾何邊線方向；倒置文字自動翻轉；Canvas note 可配 Leader line。
+- 數值欄位保留測量來源、原始輸入、允許未確認；CNC／DXF 不可用虛構尺寸填補。
+
+## Phase 1：沉浸式視窗 — 目前分支
+
+- 分支：feat/site-measure-v2-immersive。
+- 開啟工程進入滿視窗工作區，隱藏網站 Header / Footer。
+- 只保留浮動的 Projects、Undo/Redo、Add、Part、Options 按鈕，縮放控制靠畫布右下。
+- Project hub 仍能開啟舊工程、新建工程與匯入備份。
+- 檢驗：iPhone 390×844、Android 平板 800×1100、視口與工具可達性、PDF/DXF 回歸。
+- 不在 Phase 1 強行變更 Project schema；目前不同 Area 仍是舊版工作資料結構，不可宣稱已達到真正的一張跨 Room 畫布。
+- Phase 1 以獨立分支與預覽驗收，不直接替換正式網站。
+
+## Phase 2：統一 Project Canvas
+
+- 從 data model 解耦 Area 作為強制容器的限制；Part 各自具有穩定 ID、可選 Room ID、專用 layout 世界座標。
+- 提供從舊 Project.areas[*].shapes 安全遷移；保留舊版備份的 round-trip 與回退路徑。
+- 混合房型全案 Fit All、部分框選、跨 Room 的選取與移動。
+- 視覺 layout 與 mm 真正幾何尺寸分離；移動 Part 不得改動 DXF 實體。
+
+## Phase 3：Template 與幾何標註
+
+- Blank、Kitchen + 1 Bathroom、Kitchen + 2 Bathrooms。
+- 自訂工程可存為 Template；所有量測值拷貝至新工程預設 unconfirmed，避免把舊數值當現場實測。
+- 角度尺寸標籤使用線方向變換及 flip，提供短邊溢位與 Notes 遮擋 fallback。
+
+## Web / PWA / Android 對照
+
+1. **Web 工作頁：** 無需安裝、連結即用、單一前端快速更新。缺點是瀏覽器 UI、儲存限制與手勢衝突，必須自行修正。
+2. **PWA：** 已有 manifest display: standalone 與 service worker；從主畫面啟動可去掉多數瀏覽器 UI。仍是 Web 引擎，需要檢驗快取、離線與 IndexedDB 資料備份。部分 Android 非 GMS 裝置可能只有瀏覽器捷徑。
+3. **Capacitor Android：** 以原網頁 UI + TS 核心包在 Android 容器，增加原生檔案、相機與 API 接口的可能；但不會自動改善 Web Canvas 的捏合與畫圖速度，且需要 Android Studio、簽章和發布維護。
+4. **Kotlin/Compose 原生：** 操控 stylus、palm rejection、low-latency drawing 與原生檔案最有潛力；但必須另寫 UI/rendering/interaction，成本最高，不宜在產品模型未穩定前開始。
+
+**當前建議：Web 2.0 + PWA 優先；並行研究 Android Capacitor 技術可行性，不在第一輪重寫 Android 原生。**
+
+## 避免未來雙份工程
+
+- 保留 TS 純函數 core：model、units、geometry、worksheet、DXF/export data。
+- 將 Canvas interaction / transform、Storage adapters、platform file saving 分層。
+- Android 包裝前先驗證 Next.js 適用的 client bundle / static export 配置；不能假設整個 baicai.dev Next 網站可直接塞進 WebView 當離線 APK。
+- Project schema、migration、幾何輸出測試須平台共用。版本化本機資料並提供外部備份。
+
+## 驗收 Gate
+
+- 手機進工作區後，空白平移與雙指縮放不觸發網頁捲動；雙指中心不漂移。
+- 文字、Notes、按鈕可讀可點，浮層不遮擋現場要填的資料。
+- 一個 Project 中可直接看到 Kitchen 與 2 Bathroom 的 Parts（Phase 2）。
+- 關網路重啟後仍可開啟及儲存，PDF/DXF 輸出一致。
+- 不經「儲存備份」的 IndexedDB 不是唯一安全副本；關鍵現場資料必須支援明確備份。

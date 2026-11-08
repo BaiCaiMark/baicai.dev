@@ -222,3 +222,114 @@ html[data-theme="dark"] .sm-studio{--sm-bg:#172820;--sm-paper:#21372c;--sm-ink:#
 .sm-part-toolbar .sm-part-rename .sm-rename-text{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:160px;font-size:12px}
 .sm-part-toolbar .sm-part-rename .sm-rename-pencil{display:block;flex-shrink:0;color:var(--sm-green);font-size:16px}
 @media(max-width:700px){.sm-part-toolbar .sm-part-rename .sm-rename-text{max-width:100px}}
+
+/* Site Measure 2.0 phase 1: viewport-owned canvas, no competing document scroll. */
+html.sm-v2-open,html.sm-v2-open body{height:100%;overflow:hidden;overscroll-behavior:none}
+html.sm-v2-open .site-header,html.sm-v2-open .site-footer,html.sm-v2-open .skip-link{display:none}
+.sm-studio[data-immersive="true"]{
+  position:fixed;inset:0;z-index:300;width:100%;height:100dvh;min-height:0;
+  padding:0;overflow:hidden;overscroll-behavior:none;background:var(--sm-paper)
+}
+.sm-studio[data-immersive="true"] .sm-heading,
+.sm-studio[data-immersive="true"] .sm-toolbar,
+.sm-studio[data-immersive="true"] .sm-area-bar,
+.sm-studio[data-immersive="true"] .sm-area-heading,
+.sm-studio[data-immersive="true"] .sm-part-strip,
+.sm-studio[data-immersive="true"] .sm-part-message,
+.sm-studio[data-immersive="true"] .sm-footnote{display:none}
+.sm-studio[data-immersive="true"] .sm-workspace{
+  position:absolute;inset:0;z-index:0;display:block;width:100%;height:100%;min-width:0
+}
+.sm-studio[data-immersive="true"] .sm-canvas-shell{
+  position:relative;width:100%;height:100%;min-height:0;overflow:hidden;border:0;border-radius:0;
+  background:var(--sm-paper);display:block
+}
+.sm-studio[data-immersive="true"] .sm-canvas{
+  position:absolute;inset:0;display:block;flex:none;width:100%;height:100%;min-height:0;
+  touch-action:none;overscroll-behavior:contain
+}
+.sm-studio[data-immersive="true"] .sm-canvas-commandbar{
+  position:absolute;top:0;left:0;right:0;z-index:12;pointer-events:none;
+  border:0;padding:0;background:transparent;min-height:0
+}
+.sm-studio[data-immersive="true"] .sm-canvas-commandbar .sm-part-toolbar{
+  position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));
+  top:calc(env(safe-area-inset-top) + 64px);width:auto;max-width:none;max-height:min(38dvh,260px);
+  overflow-y:auto;pointer-events:auto;display:flex;flex-wrap:wrap;padding:7px;
+  border:1px solid var(--sm-line);background:var(--sm-paper);box-shadow:0 10px 26px #112b2240
+}
+.sm-studio[data-immersive="true"] .sm-canvas-commandbar .sm-canvas-tools{
+  position:fixed;right:max(11px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 13px);
+  top:auto;left:auto;z-index:12;display:flex;flex-direction:column;gap:5px;
+  margin:0;padding:0;pointer-events:none
+}
+.sm-studio[data-immersive="true"] .sm-canvas-commandbar .sm-canvas-tools button{
+  display:block;min-width:46px;min-height:46px;padding:7px 9px;pointer-events:auto;
+  background:var(--sm-paper);border:1px solid var(--sm-line);box-shadow:0 2px 8px #16362a24
+}
+.sm-studio[data-immersive="true"] .sm-canvas-hint{display:none}
+.sm-v2-dock{
+  position:absolute;z-index:50;top:calc(env(safe-area-inset-top) + 6px);
+  left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));
+  display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none
+}
+.sm-v2-dock .sm-v2-left,.sm-v2-dock .sm-v2-right{
+  display:flex;align-items:center;gap:4px;min-width:0;pointer-events:auto
+}
+.sm-v2-dock .sm-v2-left strong{
+  max-width:min(32vw,250px);font-size:12px;padding:5px 4px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;background:var(--sm-paper);
+  border-radius:5px
+}
+.sm-v2-dock button{
+  min-width:44px;min-height:46px;padding:7px 10px;
+  background:var(--sm-paper);box-shadow:0 2px 9px #16362a2c
+}
+.sm-v2-dock button[aria-pressed="true"],.sm-v2-dock button[aria-expanded="true"]{
+  background:var(--sm-soft);border-color:var(--sm-green)
+}
+.sm-v2-popover{
+  position:absolute;top:calc(env(safe-area-inset-top) + 63px);
+  z-index:60;display:flex;flex-direction:column;gap:6px;
+  width:min(330px,calc(100vw - 22px));max-height:min(68dvh,590px);
+  overflow:auto;overscroll-behavior:contain;padding:12px;
+  background:var(--sm-paper);border:1px solid var(--sm-line);
+  border-radius:12px;box-shadow:0 13px 30px #16362a30
+}
+.sm-v2-popover strong{font-size:13px}
+.sm-v2-popover button{min-height:46px;text-align:left}
+.sm-v2-add{right:calc(env(safe-area-inset-right) + 75px)}
+.sm-v2-menu{right:max(10px,env(safe-area-inset-right))}
+.sm-v2-room-list{display:flex;gap:5px;flex-wrap:wrap}
+.sm-v2-room-list button{flex:1 1 auto;white-space:nowrap}
+.sm-v2-unit{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:12px}
+.sm-v2-unit select{width:100px;min-height:42px;font-size:13px}
+.sm-v2-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--sm-muted);font-size:11px}
+.sm-studio[data-immersive="true"] .sm-export-panel,
+.sm-studio[data-immersive="true"] .sm-defaults{
+  position:fixed;top:calc(env(safe-area-inset-top) + 66px);
+  left:max(10px,env(safe-area-inset-left));z-index:45;
+  width:min(620px,calc(100vw - 20px));max-height:calc(100dvh - 85px);
+  overflow:auto;overscroll-behavior:contain;display:flex;flex-wrap:wrap;
+  gap:12px;box-shadow:0 10px 25px #17382d30
+}
+.sm-studio[data-immersive="true"] .sm-export-panel .sm-actions{flex-wrap:wrap}
+.sm-studio[data-immersive="true"] .sm-error{
+  position:fixed;top:calc(env(safe-area-inset-top) + 68px);
+  left:12px;right:12px;z-index:90;max-height:38dvh;overflow:auto
+}
+.sm-studio[data-immersive="true"] .sm-download{
+  position:fixed;bottom:calc(env(safe-area-inset-bottom) + 10px);
+  left:12px;right:72px;z-index:90;padding:9px;background:var(--sm-paper);
+  border:1px solid var(--sm-line);border-radius:9px
+}
+@media(max-width:700px){
+  .sm-v2-dock{gap:4px}
+  .sm-v2-dock .sm-v2-left strong{display:none}
+  .sm-v2-dock .sm-v2-right{gap:3px}
+  .sm-v2-dock button{font-size:12px;padding:7px 8px;min-width:42px}
+  .sm-v2-add{right:8px}
+  .sm-v2-popover{top:calc(env(safe-area-inset-top) + 60px)}
+  .sm-studio[data-immersive="true"] .sm-canvas-commandbar .sm-part-toolbar{top:calc(env(safe-area-inset-top) + 60px)}
+  .sm-studio[data-immersive="true"] .sm-context{left:10px;right:10px;width:auto;max-width:none}
+}

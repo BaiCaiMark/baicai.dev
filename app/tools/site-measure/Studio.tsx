@@ -34,6 +34,8 @@ export default function Studio() {
   const [busy, setBusy] = useState(false), [download, setDownload] = useState<Download | null>(null)
   const [panelOpen,setPanelOpen] = useState(false), [selectedEdge,setSelectedEdge] = useState<Edge | null>(null), [advanced,setAdvanced] = useState(false)
   const [directMode,setDirectMode] = useState(false), [activeRef,setActiveRef] = useState<string|null>(null), [dimensionMode,setDimensionMode] = useState(false)
+  const [workspaceOpen,setWorkspaceOpen] = useState(false), [workspaceMenuOpen,setWorkspaceMenuOpen] = useState(false), [addMenuOpen,setAddMenuOpen] = useState(false)
+  const [partToolsOpen,setPartToolsOpen] = useState(false)
   useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
   const [renameId,setRenameId] = useState<string|null>(null), [renameDraft,setRenameDraft] = useState('')
@@ -102,6 +104,7 @@ export default function Studio() {
     setMoving(null);setDeleteTarget(null);setPartMessage('');setActiveRef(null);setDimensionMode(false);setRenameId(null)
     setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
     setSavedProject(version === undefined ? null : p)
+    setWorkspaceOpen(true); setWorkspaceMenuOpen(false); setAddMenuOpen(false); setPartToolsOpen(false); setDirectMode(true)
     dispatch({ type: 'load', project: p })
   }
   const open = async (id: string) => {
@@ -150,7 +153,7 @@ export default function Studio() {
     edit(p => { p.areas.find(a => a.id === area.id)!.shapes.push(s) }); setShapeId(s.id); setSelectedEdge(null); setActiveRef(null);setDimensionMode(false);setPanelOpen(!directMode);setAdvanced(false)
     setMoving(null);setDeleteTarget(null);setPartMessage('')
   }
-  const selectPart = (id:string,openEditor=false) => {end();setShapeId(id);setSelectedEdge(null);setActiveRef(null);setDimensionMode(false);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
+  const selectPart = (id:string,openEditor=false) => {end();setPartToolsOpen(false);setShapeId(id);setSelectedEdge(null);setActiveRef(null);setDimensionMode(false);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
   const beginRename=(id:string)=>{
     const item=area?.shapes.find(s=>s.id===id)
     if(!item)return
@@ -189,7 +192,39 @@ export default function Studio() {
   const all = project ? exportSnapshot(project) : null
   const excluded = all?.entries.filter(e => !e.geometry.top) ?? []
   const dirty = !!project && savedProject !== project
-  return <div className="sm-studio" data-active={!!project} lang="en">
+  const immersive = !!project && workspaceOpen
+  useEffect(() => {
+    document.documentElement.classList.toggle('sm-v2-open', immersive)
+    return () => document.documentElement.classList.remove('sm-v2-open')
+  }, [immersive])
+  return <div className="sm-studio" data-active={!!project} data-immersive={immersive} lang="en">
+    {immersive&&project?<div className="sm-v2-dock" role="toolbar" aria-label="Workspace">
+      <div className="sm-v2-left"><button type="button" onClick={()=>{end();setWorkspaceOpen(false);setWorkspaceMenuOpen(false);setAddMenuOpen(false);setPartToolsOpen(false);setPanelOpen(false);setSelectedEdge(null);setActiveRef(null)}} aria-label="Back to projects">← Projects</button><strong title={project.name}>{project.name}</strong></div>
+      <div className="sm-v2-right">
+        <button type="button" onClick={()=>dispatch({type:'undo'})} disabled={!history.past.length} aria-label="Undo">↶</button>
+        <button type="button" onClick={()=>dispatch({type:'redo'})} disabled={!history.future.length} aria-label="Redo">↷</button>
+        <button type="button" aria-label="Add a part" aria-expanded={addMenuOpen} onClick={()=>{setAddMenuOpen(v=>!v);setWorkspaceMenuOpen(false);setPartToolsOpen(false)}}>＋</button>
+        <button type="button" aria-label="Part actions" disabled={!shape} aria-pressed={partToolsOpen} onClick={()=>{setPartToolsOpen(v=>!v);setAddMenuOpen(false);setWorkspaceMenuOpen(false)}}>Part</button>
+        <button type="button" aria-label="Workspace menu" aria-expanded={workspaceMenuOpen} onClick={()=>{setWorkspaceMenuOpen(v=>!v);setAddMenuOpen(false);setPartToolsOpen(false)}}>⋯</button>
+      </div>
+    </div>:null}
+    {immersive&&addMenuOpen&&area?<div className="sm-v2-popover sm-v2-add" role="group" aria-label="Add a part">
+      <strong>Add to canvas</strong>
+      <button onClick={()=>{addShape('rectangle');setAddMenuOpen(false)}}>＋ Rectangle</button>
+      <button onClick={()=>{addShape('l');setAddMenuOpen(false)}}>＋ L-shape</button>
+      <button onClick={()=>{addShape('vanity-step-left');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Left</button>
+      <button onClick={()=>{addShape('vanity-step-right');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Right</button>
+    </div>:null}
+    {immersive&&workspaceMenuOpen&&project?<div className="sm-v2-popover sm-v2-menu" role="group" aria-label="Workspace options">
+      <strong>Areas (temporary grouping)</strong>
+      <div className="sm-v2-room-list">{project.areas.map(a=><button key={a.id} aria-pressed={a.id===area?.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setWorkspaceMenuOpen(false)}}>{a.name}</button>)}</div>
+      <button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setWorkspaceMenuOpen(false)}}>＋ Area</button>
+      <label className="sm-v2-unit">Units <select aria-label="Display units" value={project.unit} onChange={e=>edit(p=>{p.unit=e.target.value as Unit})}><option value="in">inch</option><option value="mm">mm</option></select></label>
+      <button onClick={()=>{setExportOpen(v=>!v);setDefaultsOpen(false);setWorkspaceMenuOpen(false)}}>PDF / DXF Export</button>
+      <button onClick={()=>{setDefaultsOpen(v=>!v);setExportOpen(false);setWorkspaceMenuOpen(false)}}>Overhang defaults</button>
+      <button onClick={()=>{backup();setWorkspaceMenuOpen(false)}}>Download project backup</button>
+      <div className="sm-v2-status"><OfflineStatus /><span role="status">{dirty&&saveState.startsWith('Saved')?'Saving changes…':saveState}</span></div>
+    </div>:null}
     <header className="sm-heading"><div><p className="sm-eyebrow">FIELD WORKSHEET · QUICK MEASURE BETA</p><h1>Site Measure Studio</h1></div><span className="sm-local-pill">Local projects · no account needed</span></header>
     <div className="sm-toolbar">
       <OfflineStatus />
@@ -210,7 +245,7 @@ export default function Studio() {
     <input ref={importer} type="file" accept=".json,.site-measure.json,application/json" hidden onChange={importFile}/>
     {error?<div className="sm-error" role="alert"><p>{error}</p>{project?<div className="sm-actions"><button onClick={backup}>Download backup now</button><button onClick={()=>void persist(project)}>Retry save</button><button onClick={()=>void switchProject(importCopy(project),undefined,true)}>Save as a new copy</button></div>:null}<button aria-label="Dismiss message" onClick={()=>setError('')}>×</button></div>:null}
     {download?<p className="sm-download" role="status">File ready. <a href={download.url} download={download.name}>Download {download.name}</a></p>:null}
-    {!project?<section className="sm-welcome"><span className="sm-welcome-mark" aria-hidden="true">⌜</span><h2>Measure the line. Keep the whole story.</h2><p>Add the countertop parts in a room, tap the edge you measured, and enter the number. Keep extra readings and notes without changing the drawing.</p><div className="sm-actions"><button className="sm-primary" disabled={!ready} onClick={()=>void switchProject(newProject())}>New project</button><button disabled={!ready} onClick={()=>void switchProject(worksheetSample())}>Try sample Kitchen</button><button onClick={()=>importer.current?.click()}>Import backup</button></div>
+    {!project||!workspaceOpen?<section className="sm-welcome"><span className="sm-welcome-mark" aria-hidden="true">⌜</span><h2>Measure the line. Keep the whole story.</h2><p>Add the countertop parts in a room, tap the edge you measured, and enter the number. Keep extra readings and notes without changing the drawing.</p><div className="sm-actions">{project?<button className="sm-primary" onClick={()=>{setWorkspaceOpen(true);setDirectMode(true)}}>Enter Workspace → {project.name}</button>:null}<button className="sm-primary" disabled={!ready} onClick={()=>void switchProject(newProject())}>New project</button><button disabled={!ready} onClick={()=>void switchProject(worksheetSample())}>Try sample Kitchen</button><button onClick={()=>importer.current?.click()}>Import backup</button></div>
       {projects.length?<div className="sm-recent"><h3>Continue a project</h3>{projects.slice(0,5).map(p=><button key={p.id} onClick={()=>void open(p.id)}>{p.name}<span>Open →</span></button>)}</div>:null}
       <p className="sm-muted">Projects stay in this browser. Keep a portable backup. Preview and production use separate local storage.</p>
     </section>:<>
@@ -223,7 +258,7 @@ export default function Studio() {
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
           <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
             floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?(dimensionMode?<CanvasDimensionEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>{setSelectedEdge(null);setDimensionMode(false)}}/>:<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):activeRef?(shape.references.find(r=>r.id===activeRef)?.kind==='sink'?<CanvasSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):null):null}
-            toolbar={shape?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
+            toolbar={shape&&(!immersive||partToolsOpen)?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
               {renameId===shape.id?
                 <><input className="sm-inline-part-name" aria-label="Part name" autoFocus value={renameDraft} maxLength={120} onChange={e=>setRenameDraft(e.target.value)}
                   onBlur={finishRename} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.blur()}else if(e.key==='Escape'){renameCancelled.current=true;e.currentTarget.blur()}}}/>
