@@ -40,6 +40,9 @@ export default function Studio() {
   const [snapEnabled,setSnapEnabled] = useState(true), [orthoEnabled,setOrthoEnabled] = useState(false)
   const [fitRequest,setFitRequest] = useState(0)
   const [roomFocus,setRoomFocus] = useState<{id:string}|null>(null)
+  const [editingAreaId,setEditingAreaId] = useState<string|null>(null)
+  const [editingAreaName,setEditingAreaName] = useState('')
+  const [areaNameError,setAreaNameError] = useState('')
   const [paintOpen,setPaintOpen] = useState(false), [paintTreatment,setPaintTreatment] = useState<Treatment|null>(null)
   useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
@@ -54,6 +57,26 @@ export default function Studio() {
   const area = project?.areas.find(a => a.id === areaId) ?? project?.areas[0]
   const shape = area?.shapes.find(s => s.id === shapeId)
   const end = () => dispatch({ type: 'end' })
+  const startAreaRename = (id: string, name: string) => {
+    setEditingAreaId(id)
+    setEditingAreaName(name)
+    setAreaNameError('')
+  }
+  const cancelAreaRename = () => { setEditingAreaId(null);setAreaNameError('') }
+  const saveAreaRename = () => {
+    if (!project || !editingAreaId) return
+    const name = editingAreaName.trim()
+    if (!name) { setAreaNameError('Room name cannot be empty'); return }
+    if (project.areas.some(a => a.id !== editingAreaId && a.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setAreaNameError('A room with this name already exists'); return
+    }
+    const target = project.areas.find(a => a.id === editingAreaId)
+    if (target && target.name !== name) {
+      edit(p => { const room=p.areas.find(a => a.id === editingAreaId);if(room)room.name=name })
+      end()
+    }
+    cancelAreaRename()
+  }
   const edit = (recipe: (p: Project) => void, group?: string) => dispatch({ type: 'edit', recipe, group })
   const editShape = (recipe: (s: Shape) => void, group?: string) => {
     if (!area || !shape) return
@@ -111,7 +134,7 @@ export default function Studio() {
     setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
     setSavedProject(version === undefined ? null : p)
     setWorkspaceOpen(true); setWorkspaceMenuOpen(false); setAddMenuOpen(false); setPartToolsOpen(false); setDirectMode(true)
-    setPaintOpen(false); setPaintTreatment(null); setRoomFocus(null)
+    setPaintOpen(false); setPaintTreatment(null); setRoomFocus(null); cancelAreaRename()
     dispatch({ type: 'load', project: workspaceProject })
   }
   const open = async (id: string) => {
@@ -231,8 +254,32 @@ export default function Studio() {
     </div>:null}
     {immersive&&workspaceMenuOpen&&project?<div className="sm-v2-popover sm-v2-menu" role="group" aria-label="Workspace options">
       <strong>Rooms · all Parts share one canvas</strong>
-      <div className="sm-v2-room-list">{project.areas.map(a=><button key={a.id} aria-pressed={a.id===area?.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setRoomFocus({id:a.id});setWorkspaceMenuOpen(false)}}>{a.name}</button>)}</div>
-      <button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setWorkspaceMenuOpen(false)}}>＋ Area</button>
+      <div className="sm-v2-room-list">{project.areas.map(a=>editingAreaId===a.id?
+        <form key={a.id} className="sm-v2-room-rename" aria-label={'Rename room '+a.name} onSubmit={e=>{e.preventDefault();saveAreaRename()}}>
+          <label htmlFor={'sm-v2-room-'+a.id}>Room name</label>
+          <input id={'sm-v2-room-'+a.id} aria-label="Room name" autoFocus maxLength={120} value={editingAreaName}
+            onFocus={e=>e.currentTarget.select()}
+            onChange={e=>{setEditingAreaName(e.target.value);setAreaNameError('')}}
+            onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();cancelAreaRename()}}}/>
+          {areaNameError?<span className="sm-v2-room-error" role="alert">{areaNameError}</span>:null}
+          <div className="sm-v2-room-actions">
+            <button type="submit">Save</button>
+            <button type="button" onClick={cancelAreaRename}>Cancel</button>
+          </div>
+        </form>:
+        <div className="sm-v2-room-row" key={a.id}>
+          <button type="button" aria-pressed={a.id===area?.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setRoomFocus({id:a.id});setWorkspaceMenuOpen(false)}}>{a.name}</button>
+          <button type="button" aria-label={'Rename room '+a.name} title={'Rename '+a.name} onClick={()=>startAreaRename(a.id,a.name)}>✎</button>
+        </div>)}</div>
+      <button onClick={()=>{
+        if(project.areas.length>=30)return
+        const id=uid()
+        let n=project.areas.length+1
+        while(project.areas.some(a=>a.name.toLocaleLowerCase()==='area '+n))n++
+        const name='Area '+n
+        edit(p=>p.areas.push({id,name,notes:'',shapes:[]}))
+        setAreaId(id);setShapeId(null);startAreaRename(id,name)
+      }}>＋ Area</button>
       <strong>Canvas</strong>
       <button onClick={()=>{setFitRequest(n=>n+1);setWorkspaceMenuOpen(false)}}>Fit All · double-tap empty canvas</button>
       <button aria-pressed={snapEnabled} onClick={()=>setSnapEnabled(v=>!v)}>Snap · {snapEnabled?'On':'Off'} (align nearby Parts)</button>

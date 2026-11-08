@@ -300,8 +300,17 @@ html.sm-v2-open .site-header,html.sm-v2-open .site-footer,html.sm-v2-open .skip-
 .sm-v2-popover button{min-height:46px;text-align:left}
 .sm-v2-add{right:calc(env(safe-area-inset-right) + 75px)}
 .sm-v2-menu{right:max(10px,env(safe-area-inset-right))}
-.sm-v2-room-list{display:flex;gap:5px;flex-wrap:wrap}
-.sm-v2-room-list button{flex:1 1 auto;white-space:nowrap}
+.sm-v2-room-list{display:flex;flex-direction:column;gap:6px}
+.sm-v2-room-row{display:grid;grid-template-columns:minmax(0,1fr) 46px;gap:6px}
+.sm-v2-room-row > button:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-v2-room-row > button:last-child{text-align:center;font-size:18px;padding:6px}
+.sm-v2-room-rename{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--sm-line);border-radius:9px;background:var(--sm-soft)}
+.sm-v2-room-rename label{font-size:12px;font-weight:600}
+.sm-v2-room-rename input{width:100%;min-width:0;min-height:46px;padding:9px 11px;border:1px solid var(--sm-line);border-radius:7px;background:var(--sm-paper);font:inherit}
+.sm-v2-room-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sm-v2-room-actions button{text-align:center}
+.sm-v2-room-actions button:first-child{background:var(--sm-green);color:var(--sm-paper)}
+.sm-v2-room-error{font-size:12px;color:#a52222}
 .sm-v2-unit{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:12px}
 .sm-v2-unit select{width:100px;min-height:42px;font-size:13px}
 .sm-v2-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--sm-muted);font-size:11px}
