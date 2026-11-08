@@ -1,0 +1,53 @@
+import { test, expect } from '@playwright/test'
+
+test('Project canvas shows every Room and Room focus changes only the viewport', async ({page}) => {
+  await page.goto('/tools/site-measure')
+  await page.getByRole('button', {name:'Try sample Kitchen',exact:true}).click()
+  const canvas = page.locator('svg.sm-canvas')
+  await expect(canvas).toHaveCount(1)
+  await expect(canvas.locator('[data-shape]')).toHaveCount(5)
+  await expect(canvas.locator('[data-room]')).toHaveCount(5)
+  const viewport = await canvas.getAttribute('viewBox')
+  await page.getByRole('button', {name:'Workspace menu'}).click()
+  await page.getByRole('button', {name:'Bathroom 1',exact:true}).click()
+  await expect(canvas.locator('[data-shape]')).toHaveCount(5)
+  // Focusing a Room changes only the camera; all other Parts remain on the shared SVG.
+  await expect(canvas).not.toHaveAttribute('viewBox', viewport!)
+  const bathroomView = await canvas.getAttribute('viewBox')
+  const vanity = page.getByRole('button', {name:'Part Vanity 59 + 1',exact:true})
+  await vanity.press('Enter')
+  await page.getByRole('button', {name:'Workspace menu'}).click()
+  await expect(page.getByRole('button', {name:'Bathroom 1',exact:true})).toHaveAttribute('aria-pressed','true')
+  await page.getByRole('button', {name:'Kitchen',exact:true}).click()
+  await expect(canvas.locator('[data-shape]')).toHaveCount(5)
+  await expect(canvas).not.toHaveAttribute('viewBox', bathroomView!)
+  await page.getByRole('button', {name:'Workspace menu'}).click()
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', {name:'Download project backup'}).click()
+  const file = await download
+  const json = JSON.parse(await (await import('node:fs/promises')).readFile(await file.path(),'utf8'))
+  expect(json.canvasLayout).toBe('shared-v1')
+  expect(json.areas.map((area:{shapes:unknown[]})=>area.shapes.length)).toEqual([3,1,1])
+  const measurements = json.areas[1].shapes[0].dimensions
+  expect(measurements.width.input).toBe('59')
+})
+
+test('cross-Room edge marking updates only the chosen Part and preserves measurements', async ({page}) => {
+  await page.goto('/tools/site-measure')
+  await page.getByRole('button',{name:'Try sample Kitchen',exact:true}).click()
+  await page.getByRole('button',{name:'Vanity 59 + 1 Back run',exact:true}).press('Enter')
+  const editor=page.locator('.sm-direct-editor').first()
+  await expect(editor).toBeVisible()
+  await editor.getByRole('button',{name:'Polish',exact:true}).click()
+  const bathEdge=page.getByRole('button',{name:'Vanity 59 + 1 Back run',exact:true})
+  await expect(bathEdge).toHaveAttribute('data-treatment','polish')
+  await page.getByRole('button',{name:'Workspace menu'}).click()
+  await expect(page.getByRole('button',{name:'Bathroom 1',exact:true})).toHaveAttribute('aria-pressed','true')
+  const download=page.waitForEvent('download')
+  await page.getByRole('button',{name:'Download project backup'}).click()
+  const file=await download
+  const json=JSON.parse(await (await import('node:fs/promises')).readFile(await file.path(),'utf8'))
+  expect(json.areas[1].shapes[0].treatments.back).toBe('polish')
+  expect(json.areas[1].shapes[0].dimensions.width.input).toBe('59')
+  expect(json.areas[0].shapes[0].treatments?.back).toBeUndefined()
+})

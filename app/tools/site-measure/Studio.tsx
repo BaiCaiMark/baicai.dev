@@ -13,6 +13,7 @@ import { historyReducer, initialHistory } from './core/history'
 import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, markTreatment, nextPartNameForArea, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape, type Treatment } from './core/model'
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
+import { adoptSharedCanvas, projectCanvasItems } from './core/project-canvas'
 import type { Unit } from './core/units'
 
 type SavedItem = { id: string; name: string; updatedAt: string }
@@ -38,6 +39,7 @@ export default function Studio() {
   const [partToolsOpen,setPartToolsOpen] = useState(false)
   const [snapEnabled,setSnapEnabled] = useState(true), [orthoEnabled,setOrthoEnabled] = useState(false)
   const [fitRequest,setFitRequest] = useState(0)
+  const [roomFocus,setRoomFocus] = useState<{id:string}|null>(null)
   const [paintOpen,setPaintOpen] = useState(false), [paintTreatment,setPaintTreatment] = useState<Treatment|null>(null)
   useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
@@ -102,14 +104,15 @@ export default function Studio() {
   useEffect(() => () => { if (download) URL.revokeObjectURL(download.url) }, [download])
   const switchProject = async (p: Project, version?: number, forceCopy = false) => {
     if (!forceCopy && latest.current && !(await persist(latest.current))) return
+    const workspaceProject = adoptSharedCanvas(p)
     if (version !== undefined) { versions.current.set(p.id, version); saved.current.set(p.id, p) }
-    setAreaId(p.areas[0].id); setShapeId(p.areas[0].shapes[0]?.id ?? null)
+    setAreaId(workspaceProject.areas[0].id); setShapeId(workspaceProject.areas[0].shapes[0]?.id ?? null)
     setMoving(null);setDeleteTarget(null);setPartMessage('');setActiveRef(null);setDimensionMode(false);setRenameId(null)
     setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
     setSavedProject(version === undefined ? null : p)
     setWorkspaceOpen(true); setWorkspaceMenuOpen(false); setAddMenuOpen(false); setPartToolsOpen(false); setDirectMode(true)
-    setPaintOpen(false); setPaintTreatment(null)
-    dispatch({ type: 'load', project: p })
+    setPaintOpen(false); setPaintTreatment(null); setRoomFocus(null)
+    dispatch({ type: 'load', project: workspaceProject })
   }
   const open = async (id: string) => {
     try { if (latest.current && !(await persist(latest.current))) return; if (db.current) { const row = await db.current.load(id); await switchProject(row.project, row.version) } } catch (e) { setError(errorText(e)) }
@@ -157,16 +160,17 @@ export default function Studio() {
       // An edge becomes colored only after an explicit field-treatment choice.
       s.treatments={}
     }
-    const existing = worksheetLayout(area.shapes)
-    s.layout = {x:100,y:Math.min(10000,Math.max(-90,...existing.map(p=>p.y+p.height))+200)}
+    const existing = projectCanvasItems(project.areas)
+    s.layout = {x:100,y:Math.min(10000,Math.max(-90,...existing.map(p=>p.y+p.height))+240)}
     edit(p => { p.areas.find(a => a.id === area.id)!.shapes.push(s) }); setShapeId(s.id); setSelectedEdge(null); setActiveRef(null);setDimensionMode(false);setPanelOpen(!directMode);setAdvanced(false)
     setMoving(null);setDeleteTarget(null);setPartMessage('')
   }
-  const selectPart = (id:string,openEditor=false) => {end();setPartToolsOpen(false);setShapeId(id);setSelectedEdge(null);setActiveRef(null);setDimensionMode(false);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
+  const selectPart = (id:string,openEditor=false) => {const owner=project?.areas.find(a=>a.shapes.some(s=>s.id===id));if(owner)setAreaId(owner.id);end();setPartToolsOpen(false);setShapeId(id);setSelectedEdge(null);setActiveRef(null);setDimensionMode(false);setPanelOpen(openEditor&&!!id);setAdvanced(false);setMoving(null);setDeleteTarget(null);setPartMessage('')}
   const beginRename=(id:string)=>{
-    const item=area?.shapes.find(s=>s.id===id)
-    if(!item)return
-    end();setShapeId(id);setRenameDraft(item.name);setRenameId(id);renameCancelled.current=false
+    const owner=project?.areas.find(a=>a.shapes.some(s=>s.id===id))
+    const item=owner?.shapes.find(s=>s.id===id)
+    if(!item||!owner)return
+    end();setAreaId(owner.id);setShapeId(id);setRenameDraft(item.name);setRenameId(id);renameCancelled.current=false
     setSelectedEdge(null);setActiveRef(null);setPanelOpen(false);setMoving(null)
   }
   const finishRename=()=>{
@@ -226,8 +230,8 @@ export default function Studio() {
       <button onClick={()=>{addShape('vanity-step-right');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Right</button>
     </div>:null}
     {immersive&&workspaceMenuOpen&&project?<div className="sm-v2-popover sm-v2-menu" role="group" aria-label="Workspace options">
-      <strong>Areas (temporary grouping)</strong>
-      <div className="sm-v2-room-list">{project.areas.map(a=><button key={a.id} aria-pressed={a.id===area?.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setWorkspaceMenuOpen(false)}}>{a.name}</button>)}</div>
+      <strong>Rooms · all Parts share one canvas</strong>
+      <div className="sm-v2-room-list">{project.areas.map(a=><button key={a.id} aria-pressed={a.id===area?.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setRoomFocus({id:a.id});setWorkspaceMenuOpen(false)}}>{a.name}</button>)}</div>
       <button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setWorkspaceMenuOpen(false)}}>＋ Area</button>
       <strong>Canvas</strong>
       <button onClick={()=>{setFitRequest(n=>n+1);setWorkspaceMenuOpen(false)}}>Fit All · double-tap empty canvas</button>
@@ -265,12 +269,12 @@ export default function Studio() {
     </section>:<>
       {exportOpen?<section className="sm-export-panel"><div><h2>Export field worksheet</h2><p>PDF keeps all readings and notes. DXF includes only complete geometry. Review before fabrication.</p>{excluded.length?<p className="sm-error-text">Excluded from DXF: {excluded.map(e=>e.area.name+' / '+e.shape.name).join(', ')}</p>:null}</div><div className="sm-actions"><button disabled={busy} onClick={()=>void exportFile('pdf')}>{busy?'Working…':'Export PDF'}</button><button disabled={busy||!all?.entries.some(e=>e.geometry.top)} onClick={()=>void exportFile('dxf')}>Export DXF</button></div></section>:null}
       {defaultsOpen?<section className="sm-defaults"><div><h2>Project overhang defaults</h2><p>Apply only to a named edge. Changing these values does not change existing parts.</p></div>{(['end','front'] as const).map(key=><QuantityField key={key} label={key==='end'?'Typical end overhang':'Typical front overhang'} quantity={project.defaults[key]} unit={project.unit} allowance onEnd={end} onChange={q=>edit(p=>{p.defaults[key]=q;p.defaults.revision++},'default-'+key)}/>)}</section>:null}
-      <div className="sm-area-bar"><div className="sm-area-tabs" aria-label="Areas">{project.areas.map(a=><button key={a.id} aria-pressed={area?.id===a.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'')}}>{a.name}<span>{a.shapes.length} parts</span></button>)}</div><button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}>＋ Area</button></div>
+      <div className="sm-area-bar"><div className="sm-area-tabs" aria-label="Areas">{project.areas.map(a=><button key={a.id} aria-pressed={area?.id===a.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setRoomFocus({id:a.id})}}>{a.name}<span>{a.shapes.length} parts</span></button>)}</div><button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}>＋ Area</button></div>
       {area?<>
         <div className="sm-area-heading"><details ref={areaDetails} className="sm-area-settings"><summary>{area.name} <span>▾</span></summary><div><label>Area name<input aria-label="Area name" maxLength={120} value={area.name} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.name=e.target.value||'Unnamed area'},'area-name')} onBlur={end}/></label><label>Area notes<textarea aria-label="Area notes" maxLength={4000} value={area.notes} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.notes=e.target.value},'area-notes')} onBlur={end}/></label></div></details>
           <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button><details className="sm-template-picker"><summary>＋ Vanity Step</summary><div className="sm-template-picker-options"><p>Stepped bathroom vanity · choose the full-depth side.</p><button onClick={e=>{addShape('vanity-step-left');e.currentTarget.closest('details')!.open=false}}>Deep Left</button><button onClick={e=>{addShape('vanity-step-right');e.currentTarget.closest('details')!.open=false}}>Deep Right</button></div></details></div></div>
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
-          <MeasureCanvas key={area.id+'-'+fitRequest} area={area} snapEnabled={snapEnabled} orthoEnabled={orthoEnabled} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
+          <MeasureCanvas key={project.id} area={area} areas={project.areas} fitRequest={fitRequest} roomFocus={roomFocus} snapEnabled={snapEnabled} orthoEnabled={orthoEnabled} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
             paintToolbar={immersive&&paintOpen?<div className="sm-paint-toolbar" role="toolbar" aria-label="Paint edge treatment">
               <span className="sm-paint-heading">Mark edge</span>
               {([['polish','Polish'],['no-polish','No Polish'],['miter','Miter']] as const).map(([kind,label])=><button key={kind} type="button" data-treatment={kind} aria-pressed={paintTreatment===kind} onClick={()=>{setPaintTreatment(kind);setSelectedEdge(null);setActiveRef(null)}}><span className="sm-paint-swatch"/>{label}</button>)}
@@ -299,18 +303,19 @@ export default function Studio() {
             onRename={beginRename}
             onEdge={selection=>{
               if(paintOpen&&paintTreatment&&directMode){
-                const current=area.shapes.find(s=>s.id===selection.partId)
+                const owner=project.areas.find(a=>a.shapes.some(s=>s.id===selection.partId))
+                const current=owner?.shapes.find(s=>s.id===selection.partId)
                 if(current?.treatments?.[selection.edge]!==paintTreatment){
-                  edit(p=>{const s=p.areas.find(a=>a.id===area.id)?.shapes.find(s=>s.id===selection.partId);if(s)markTreatment(s,selection.edge,paintTreatment)})
+                  edit(p=>{const s=p.areas.find(a=>a.id===owner?.id)?.shapes.find(s=>s.id===selection.partId);if(s)markTreatment(s,selection.edge,paintTreatment)})
                   end()
                 }
-                setShapeId(selection.partId);setSelectedEdge(null);setActiveRef(null);setPanelOpen(false);return
+                if(owner)setAreaId(owner.id);setShapeId(selection.partId);setSelectedEdge(null);setActiveRef(null);setPanelOpen(false);return
               }
-              end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(false);setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false);setMoving(null);setDeleteTarget(null)
+              end();selectPart(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(false);setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false);setMoving(null);setDeleteTarget(null)
             }}
-            onDimension={selection=>{end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(true);setActiveRef(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}
-            onReference={(partId,refId)=>{end();setShapeId(partId);setActiveRef(refId);setSelectedEdge(null);setDimensionMode(false);setPanelOpen(!directMode);setAdvanced(true);setMoving(null);setDeleteTarget(null)}}
-            onPlace={(id,position)=>edit(p=>{p.areas.find(a=>a.id===area.id)!.shapes.find(s=>s.id===id)!.layout=position})}/>
+            onDimension={selection=>{end();selectPart(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(true);setActiveRef(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}
+            onReference={(partId,refId)=>{end();selectPart(partId);setActiveRef(refId);setSelectedEdge(null);setDimensionMode(false);setPanelOpen(!directMode);setAdvanced(true);setMoving(null);setDeleteTarget(null)}}
+            onPlace={(id,position)=>edit(p=>{const owner=p.areas.find(a=>a.shapes.some(s=>s.id===id));const part=owner?.shapes.find(s=>s.id===id);if(part)part.layout=position})}/>
           {panelOpen&&shape?(advanced?<PartEditor key={shape.id+(selectedEdge??'part')} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onRemove={()=>{setDeleteTarget(shape.id);setPanelOpen(false);setMoving(null)}} onClose={()=>{end();setPanelOpen(false);setSelectedEdge(null)}}/>:<QuickMeasurePanel key={shape.id+(selectedEdge??'part')} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onDetails={()=>setAdvanced(true)} onClose={()=>{end();setPanelOpen(false);setSelectedEdge(null)}}/>):null}
         </div>
         <div className="sm-part-strip" aria-label="Parts">{area.shapes.map(s=><button key={s.id} aria-pressed={s.id===shape?.id} onClick={()=>selectPart(s.id)}>{s.name}{calculate(s).top?'':' · incomplete'}</button>)}</div>

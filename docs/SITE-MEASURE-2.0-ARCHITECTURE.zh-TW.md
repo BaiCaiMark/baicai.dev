@@ -59,3 +59,18 @@
 - 一個 Project 中可直接看到 Kitchen 與 2 Bathroom 的 Parts（Phase 2）。
 - 關網路重啟後仍可開啟及儲存，PDF/DXF 輸出一致。
 - 不經「儲存備份」的 IndexedDB 不是唯一安全副本；關鍵現場資料必須支援明確備份。
+
+## P3.1 · Project Shared Canvas（2026-11-07，Preview 分支）
+
+**本輪完成的是跨 Room 共用畫布與相容性底座，尚非完整 Part/Room 資料模型扁平化。**
+
+- `projectCanvasItems()` 將所有 `areas[*].shapes` 投影至同一 SVG，座標只供視覺排版，不作測量及 CNC 原點。
+- `adoptSharedCanvas()` 對舊工程作一次非破壞性 clone：保留第一個非空 Room 的排版，後續 Room 移至下方；設定可選的 `canvasLayout: 'shared-v1'` 標記，重新開啟不重複移動。
+- 保留既有 schemaVersion 2 與 `areas` 儲存格式，舊備份可讀；不重排 ID、尺寸、Overhang、Notes、Sink 或 Edge Treatment。
+- 點擊跨 Room Part／Edge 會同步切換目前 Room；移動與 Paint 按 Part ID 寫回正確 Room。Room 選單可快速聚焦區域，但所有 Parts 仍在同一 Canvas；Fit All 顯示整個 Project。
+- 新增 Part 放於全 Project 現有 Parts 下方；不再從各 Room 原點重新開始造成重疊。
+- 第一輪回歸：96 個核心測試；P1/P2 及 Project Canvas 的新瀏覽器測試需保持綠燈，另執行 type-check、lint、production build。
+- **限制**：`Shape` 仍位於 `Area.shapes`，尚未將 `roomId` 改為可選 metadata；跨 Room 的真正自由重新分類、Canvas overview PDF、框選、旋轉尺寸文字自動翻轉，屬後續 P3.2+。舊瀏覽器測試部分仍使用 P1 以前的常駐工具列定位器，需另作更新，不能誤報為整套已通過。
+- 所有功能留在 `feat/site-measure-v2-immersive` Preview，不合併 `main`；現場資料應保留 JSON Backup。若需要回退，可使用 Preview 分支前一提交，舊工程 schemaVersion 2 仍可讀（新 `canvasLayout` 欄位需在回退前從備份移除或使用當前分支重新開啟）。
+
+**下一步**：P2 iPhone 真機確認連續 Paint 手感；P3.2 將 Room 真正變成可選 Part metadata，完善建立 Room／改分類／全案 overview 的 UX；再做尺寸標籤沿線旋轉與自動可讀翻轉。PDF 現場交付優先，DXF 的切割幾何仍由 True Form Studio／AutoCAD 驗證。

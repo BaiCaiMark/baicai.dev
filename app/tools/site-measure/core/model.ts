@@ -50,7 +50,7 @@ export const shapeSchema = z.object({
   layout: z.object({x:z.number().finite().min(-10000).max(10000),y:z.number().finite().min(-10000).max(10000)}).strict().optional(),
 }).strict()
 const currentProjectSchema = z.object({
-  schemaVersion: z.literal(2), id, name: z.string().min(1).max(120),
+  schemaVersion: z.literal(2), canvasLayout: z.literal('shared-v1').optional(), id, name: z.string().min(1).max(120),
   revision: z.number().int().min(0), updatedAt: z.string().datetime(), unit: z.enum(['in', 'mm']),
   defaults: z.object({ revision: z.number().int().min(0), end: quantitySchema, front: quantitySchema }).strict(),
   areas: z.array(z.object({

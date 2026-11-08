@@ -1,16 +1,17 @@
 'use client'
-import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
 import { sinkPin } from './sink-pin'
 import { edgeOrder, treatmentOf, value, type Area, type Edge } from '../core/model'
-import { edgeNames, edgeLength, finishedEdgeReading, finishedFormula, worksheetLayout } from '../core/worksheet'
+import { projectCanvasItems } from '../core/project-canvas'
+import { edgeNames, edgeLength, finishedEdgeReading, finishedFormula } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
-type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
+type Props = { area: Area; areas: Area[]; fitRequest?: number; roomFocus?: {id:string} | null; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
 const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
-export default function MeasureCanvas({ area, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
+export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
@@ -22,16 +23,48 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
   const [drag,setDrag]=useState<{id:string;position:Point}|null>(null)
   const [editorAnchor,setEditorAnchor]=useState<Point|null>(null)
   const lastBlankTap = useRef<{time:number;point:Point}|null>(null)
-  const layout=useMemo(()=>worksheetLayout(area.shapes),[area.shapes])
+  const layout=useMemo(()=>projectCanvasItems(areas),[areas])
   const fitted=useMemo(()=>{
     if(!layout.length)return{x:0,y:0,width:1100,height:650}
     const x=Math.min(...layout.map(p=>p.x))-120,y=Math.min(...layout.map(p=>p.y))-150
     return{x,y,width:Math.max(...layout.map(p=>p.x+p.width+120))-x,height:Math.max(...layout.map(p=>p.y+p.height+110))-y}
   },[layout])
-  const fit={...fitted}
-  if(fit.width/fit.height<ratio){const w=fit.height*ratio;fit.x-=(w-fit.width)/2;fit.width=w}
-  else{const h=fit.width/ratio;fit.y-=(h-fit.height)/2;fit.height=h}
+  const fit=useMemo(()=>{
+    const box={...fitted}
+    if(box.width/box.height<ratio){const w=box.height*ratio;box.x-=(w-box.width)/2;box.width=w}
+    else{const h=box.width/ratio;box.y-=(h-box.height)/2;box.height=h}
+    return box
+  },[fitted,ratio])
   const box=manual??fit,liveBox=useRef(box),liveDrag=useRef(drag)
+  const firstRoom=useRef(area.id),initialFocused=useRef(false),previousFit=useRef(fitRequest),previousRoomFocus=useRef(roomFocus)
+  const roomBox=useCallback((id:string):Bounds|null=>{
+    const items=layout.filter(item=>item.areaId===id)
+    if(!items.length)return null
+    const x=Math.min(...items.map(p=>p.x))-120,y=Math.min(...items.map(p=>p.y))-150
+    const b={x,y,width:Math.max(...items.map(p=>p.x+p.width+120))-x,height:Math.max(...items.map(p=>p.y+p.height+110))-y}
+    if(b.width/b.height<ratio){const w=b.height*ratio;b.x-=(w-b.width)/2;b.width=w}
+    else{const h=b.width/ratio;b.y-=(h-b.height)/2;b.height=h}
+    return b
+  },[layout,ratio])
+  useLayoutEffect(()=>{
+    if(initialFocused.current)return
+    const b=roomBox(firstRoom.current)
+    if(!b)return
+    const frame=requestAnimationFrame(()=>{initialFocused.current=true;liveBox.current=b;setManual(b)})
+    return()=>cancelAnimationFrame(frame)
+  },[roomBox])
+  useLayoutEffect(()=>{
+    if(!roomFocus||roomFocus===previousRoomFocus.current)return
+    const b=roomBox(roomFocus.id)
+    if(!b)return
+    const frame=requestAnimationFrame(()=>{previousRoomFocus.current=roomFocus;liveBox.current=b;setManual(b)})
+    return()=>cancelAnimationFrame(frame)
+  },[roomFocus,roomBox])
+  useLayoutEffect(()=>{
+    if(previousFit.current===fitRequest)return
+    const frame=requestAnimationFrame(()=>{previousFit.current=fitRequest;liveBox.current=fit;setManual(null)})
+    return()=>cancelAnimationFrame(frame)
+  },[fitRequest,fit])
   const screenScale=Math.max(box.width/Math.max(1,canvasSize.width),box.height/Math.max(1,canvasSize.height))
   useLayoutEffect(()=>{liveBox.current=box;liveDrag.current=drag;manualView.current=manual!==null},[box,drag,manual])
   useLayoutEffect(()=>{
@@ -231,13 +264,13 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
   }
   return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving} data-direct={!!directMode} data-painting={!!paintTreatment}>
     {toolbar?<div className="sm-canvas-commandbar">{toolbar}</div>:null}
-    <svg ref={svg} className="sm-canvas" aria-label={area.name+' measurement worksheet'} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
+    <svg ref={svg} className="sm-canvas" aria-label={'Project measurement canvas · active room '+area.name} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
       {layout.map(item=>{
         const {shape,points,local}=item,position=drag?.id===shape.id?drag.position:{x:item.x,y:item.y},g=calculate(shape)
         const sign=polygonArea(points)>0?1:-1
-        return <g key={shape.id} data-shape={shape.id} transform={'translate('+position.x+' '+position.y+')'}>
+        return <g key={shape.id} data-shape={shape.id} data-room={item.areaId} transform={'translate('+position.x+' '+position.y+')'}>
           <text x="0" y={directMode?"-110":"-78"} className="sm-part-title" data-part-title={directMode?'true':undefined} role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Rename part '+shape.name:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onRename?.(shape.id)}}}>{shape.name.length>36?shape.name.slice(0,35)+'…':shape.name}</text>
-          <text x="0" y={directMode?"-86":"-57"} className="sm-part-caption">{directMode?(g.top?'Finished':'Finished · incomplete'):(item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements')}{!directMode&&(shape.notes||shape.fieldRecords.length)?' · notes / checks in Edit':''}</text>
+          <text x="0" y={directMode?"-86":"-57"} className="sm-part-caption">{(areas.length>1?item.areaName+' · ':'')+(directMode?(g.top?'Finished':'Finished · incomplete'):(item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements'))}{!directMode&&(shape.notes||shape.fieldRecords.length)?' · notes / checks in Edit':''}</text>
           <path className={item.guide?'sm-template-guide':'sm-top'} data-selected={selected===shape.id} d={path(points)} role="button" tabIndex={0} aria-label={'Part '+shape.name} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(shape.id)}}}/>
           {shape.basis==='cabinet'&&g.base?<path className="sm-cabinet" d={path(g.base.map(local))}/>:null}
           {item.guide&&!directMode?<text x={item.width/2} y={item.height/2} className="sm-guide-watermark" textAnchor="middle">MEASURE EDGES</text>:null}
