@@ -10,9 +10,10 @@ import OfflineStatus from './OfflineStatus'
 import QuantityField from './components/QuantityField'
 import { calculate, exportSnapshot } from './core/geometry'
 import { historyReducer, initialHistory } from './core/history'
-import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, markTreatment, nextPartNameForArea, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape, type Treatment } from './core/model'
+import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, markTreatment, nextPartNameForArea, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape, type Treatment, type CanvasNote } from './core/model'
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
+import { canvasNoteAt, movedCanvasNote } from './core/canvas-notes'
 import { adoptSharedCanvas, projectCanvasItems } from './core/project-canvas'
 import type { Unit } from './core/units'
 
@@ -44,6 +45,8 @@ export default function Studio() {
   const [editingAreaName,setEditingAreaName] = useState('')
   const [areaNameError,setAreaNameError] = useState('')
   const [paintOpen,setPaintOpen] = useState(false), [paintTreatment,setPaintTreatment] = useState<Treatment|null>(null)
+  const [noteTool,setNoteTool] = useState<{mode:'new'|'retarget';id?:string}|null>(null)
+  const [noteDraft,setNoteDraft] = useState<{note:CanvasNote;existing:boolean}|null>(null)
   useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
   const [renameId,setRenameId] = useState<string|null>(null), [renameDraft,setRenameDraft] = useState('')
@@ -78,6 +81,57 @@ export default function Studio() {
     cancelAreaRename()
   }
   const edit = (recipe: (p: Project) => void, group?: string) => dispatch({ type: 'edit', recipe, group })
+  const beginCanvasNote = () => {
+    if(!project)return
+    if((project.canvasNotes??[]).length>=100){setError('Limit: 100 canvas notes per project');return}
+    setNoteTool({mode:'new'});setNoteDraft(null);setAddMenuOpen(false);setWorkspaceMenuOpen(false)
+    setPaintOpen(false);setPaintTreatment(null);setPanelOpen(false);setPartToolsOpen(false);setSelectedEdge(null);setActiveRef(null)
+  }
+  const pickNoteTarget = (point:{x:number;y:number}) => {
+    if(!project||!noteTool)return
+    if(noteTool.mode==='new'){
+      setNoteDraft({note:canvasNoteAt(uid(),'',point),existing:false})
+    }else{
+      const id=noteTool.id
+      if(id){
+        edit(p=>{const n=p.canvasNotes?.find(n=>n.id===id);if(n){n.targetX=point.x;n.targetY=point.y}})
+        end()
+      }
+    }
+    setNoteTool(null)
+  }
+  const openCanvasNote = (id:string) => {
+    const note=project?.canvasNotes?.find(n=>n.id===id)
+    if(!note)return
+    setNoteTool(null);setNoteDraft({note:structuredClone(note),existing:true})
+    setPanelOpen(false);setSelectedEdge(null);setActiveRef(null)
+  }
+  const saveCanvasNote = () => {
+    if(!noteDraft||!project)return
+    const note={...noteDraft.note,text:noteDraft.note.text.trim()}
+    if(!note.text)return
+    edit(p=>{
+      p.canvasNotes??=[]
+      const index=p.canvasNotes.findIndex(n=>n.id===note.id)
+      if(index<0){if(p.canvasNotes.length<100)p.canvasNotes.push(note)}
+      else p.canvasNotes[index]=note
+    })
+    end();setNoteDraft(null)
+  }
+  const removeCanvasNote = () => {
+    if(!noteDraft?.existing)return
+    const id=noteDraft.note.id
+    edit(p=>{p.canvasNotes=(p.canvasNotes??[]).filter(n=>n.id!==id)})
+    end();setNoteDraft(null)
+  }
+  const placeCanvasNote = (id:string,position:{x:number;y:number}) => {
+    if(!project)return
+    const original=project.canvasNotes?.find(n=>n.id===id)
+    if(!original||(original.x===position.x&&original.y===position.y))return
+    edit(p=>{const n=p.canvasNotes?.find(n=>n.id===id);if(n){n.x=position.x;n.y=position.y}})
+    end()
+    setNoteDraft(d=>d?.note.id===id?{...d,note:movedCanvasNote(d.note,position.x,position.y)}:d)
+  }
   const editShape = (recipe: (s: Shape) => void, group?: string) => {
     if (!area || !shape) return
     edit(p => { const s = p.areas.find(a => a.id === area.id)?.shapes.find(s => s.id === shape.id); if (s) recipe(s) }, group)
@@ -134,7 +188,7 @@ export default function Studio() {
     setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
     setSavedProject(version === undefined ? null : p)
     setWorkspaceOpen(true); setWorkspaceMenuOpen(false); setAddMenuOpen(false); setPartToolsOpen(false); setDirectMode(true)
-    setPaintOpen(false); setPaintTreatment(null); setRoomFocus(null); cancelAreaRename()
+    setPaintOpen(false); setPaintTreatment(null); setRoomFocus(null); cancelAreaRename();setNoteTool(null);setNoteDraft(null)
     dispatch({ type: 'load', project: workspaceProject })
   }
   const open = async (id: string) => {
@@ -235,7 +289,7 @@ export default function Studio() {
   }, [immersive])
   return <div className="sm-studio" data-active={!!project} data-immersive={immersive} lang="en">
     {immersive&&project?<div className="sm-v2-dock" role="toolbar" aria-label="Workspace">
-      <div className="sm-v2-left"><button type="button" onClick={()=>{end();setWorkspaceOpen(false);setWorkspaceMenuOpen(false);setAddMenuOpen(false);setPartToolsOpen(false);setPaintOpen(false);setPaintTreatment(null);setPanelOpen(false);setSelectedEdge(null);setActiveRef(null)}} aria-label="Back to projects">← Projects</button><strong title={project.name}>{project.name}</strong></div>
+      <div className="sm-v2-left"><button type="button" onClick={()=>{end();setWorkspaceOpen(false);setWorkspaceMenuOpen(false);setAddMenuOpen(false);setPartToolsOpen(false);setPaintOpen(false);setPaintTreatment(null);setPanelOpen(false);setSelectedEdge(null);setActiveRef(null);setNoteTool(null);setNoteDraft(null)}} aria-label="Back to projects">← Projects</button><strong title={project.name}>{project.name}</strong></div>
       <div className="sm-v2-right">
         <button type="button" onClick={()=>dispatch({type:'undo'})} disabled={!history.past.length} aria-label="Undo">↶</button>
         <button type="button" onClick={()=>dispatch({type:'redo'})} disabled={!history.future.length} aria-label="Redo">↷</button>
@@ -251,6 +305,7 @@ export default function Studio() {
       <button onClick={()=>{addShape('l');setAddMenuOpen(false)}}>＋ L-shape</button>
       <button onClick={()=>{addShape('vanity-step-left');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Left</button>
       <button onClick={()=>{addShape('vanity-step-right');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Right</button>
+      <button type="button" onClick={beginCanvasNote}>＋ Note · field annotation</button>
     </div>:null}
     {immersive&&workspaceMenuOpen&&project?<div className="sm-v2-popover sm-v2-menu" role="group" aria-label="Workspace options">
       <strong>Rooms · all Parts share one canvas</strong>
@@ -314,14 +369,29 @@ export default function Studio() {
       {projects.length?<div className="sm-recent"><h3>Continue a project</h3>{projects.slice(0,5).map(p=><button key={p.id} onClick={()=>void open(p.id)}>{p.name}<span>Open →</span></button>)}</div>:null}
       <p className="sm-muted">Projects stay in this browser. Keep a portable backup. Preview and production use separate local storage.</p>
     </section>:<>
-      {exportOpen?<section className="sm-export-panel"><div><h2>Export field worksheet</h2><p>PDF keeps all readings and notes. DXF includes only complete geometry. Review before fabrication.</p>{excluded.length?<p className="sm-error-text">Excluded from DXF: {excluded.map(e=>e.area.name+' / '+e.shape.name).join(', ')}</p>:null}</div><div className="sm-actions"><button disabled={busy} onClick={()=>void exportFile('pdf')}>{busy?'Working…':'Export PDF'}</button><button disabled={busy||!all?.entries.some(e=>e.geometry.top)} onClick={()=>void exportFile('dxf')}>Export DXF</button></div></section>:null}
+      {exportOpen?<section className="sm-export-panel"><div><h2>Export field worksheet</h2><p>PDF keeps Part / Edge readings and notes. Canvas Notes are saved in the project backup but are not in the PDF yet (planned for P5.3). DXF includes only complete geometry. Review before fabrication.</p>{excluded.length?<p className="sm-error-text">Excluded from DXF: {excluded.map(e=>e.area.name+' / '+e.shape.name).join(', ')}</p>:null}</div><div className="sm-actions"><button disabled={busy} onClick={()=>void exportFile('pdf')}>{busy?'Working…':'Export PDF'}</button><button disabled={busy||!all?.entries.some(e=>e.geometry.top)} onClick={()=>void exportFile('dxf')}>Export DXF</button></div></section>:null}
       {defaultsOpen?<section className="sm-defaults"><div><h2>Project overhang defaults</h2><p>Apply only to a named edge. Changing these values does not change existing parts.</p></div>{(['end','front'] as const).map(key=><QuantityField key={key} label={key==='end'?'Typical end overhang':'Typical front overhang'} quantity={project.defaults[key]} unit={project.unit} allowance onEnd={end} onChange={q=>edit(p=>{p.defaults[key]=q;p.defaults.revision++},'default-'+key)}/>)}</section>:null}
       <div className="sm-area-bar"><div className="sm-area-tabs" aria-label="Areas">{project.areas.map(a=><button key={a.id} aria-pressed={area?.id===a.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setRoomFocus({id:a.id})}}>{a.name}<span>{a.shapes.length} parts</span></button>)}</div><button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}>＋ Area</button></div>
       {area?<>
         <div className="sm-area-heading"><details ref={areaDetails} className="sm-area-settings"><summary>{area.name} <span>▾</span></summary><div><label>Area name<input aria-label="Area name" maxLength={120} value={area.name} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.name=e.target.value||'Unnamed area'},'area-name')} onBlur={end}/></label><label>Area notes<textarea aria-label="Area notes" maxLength={4000} value={area.notes} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.notes=e.target.value},'area-notes')} onBlur={end}/></label></div></details>
           <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button><details className="sm-template-picker"><summary>＋ Vanity Step</summary><div className="sm-template-picker-options"><p>Stepped bathroom vanity · choose the full-depth side.</p><button onClick={e=>{addShape('vanity-step-left');e.currentTarget.closest('details')!.open=false}}>Deep Left</button><button onClick={e=>{addShape('vanity-step-right');e.currentTarget.closest('details')!.open=false}}>Deep Right</button></div></details></div></div>
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
-          <MeasureCanvas key={project.id} area={area} areas={project.areas} fitRequest={fitRequest} roomFocus={roomFocus} snapEnabled={snapEnabled} orthoEnabled={orthoEnabled} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
+          <MeasureCanvas key={project.id} area={area} areas={project.areas}
+            canvasNotes={project.canvasNotes??[]} notePlacement={!!noteTool}
+            selectedCanvasNoteId={noteDraft?.note.id??null}
+            onPickNoteTarget={pickNoteTarget} onCancelNotePlacement={()=>setNoteTool(null)}
+            onSelectCanvasNote={openCanvasNote} onMoveCanvasNote={placeCanvasNote}
+            noteEditor={noteDraft?<form aria-label={noteDraft.existing?'Edit canvas note':'New canvas note'} onSubmit={e=>{e.preventDefault();saveCanvasNote()}}>
+              <strong>{noteDraft.existing?'Edit field note':'New field note'}</strong>
+              <p>Field annotation only · not a measured CNC contour</p>
+              <textarea aria-label="Canvas note text" autoFocus maxLength={800} placeholder="e.g. Wall not straight · check before cutting" value={noteDraft.note.text} onChange={e=>setNoteDraft({...noteDraft,note:{...noteDraft.note,text:e.target.value}})}/>
+              <div className="sm-note-editor-actions">
+                <button type="submit" disabled={!noteDraft.note.text.trim()}>Save</button>
+                <button type="button" onClick={()=>setNoteDraft(null)}>Cancel</button>
+                {noteDraft.existing?<button type="button" onClick={()=>{setNoteTool({mode:'retarget',id:noteDraft.note.id});setNoteDraft(null)}}>Move pin</button>:null}
+                {noteDraft.existing?<button type="button" className="sm-note-delete" onClick={removeCanvasNote}>Delete</button>:null}
+              </div>
+            </form>:null} fitRequest={fitRequest} roomFocus={roomFocus} snapEnabled={snapEnabled} orthoEnabled={orthoEnabled} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
             paintToolbar={immersive&&paintOpen?<div className="sm-paint-toolbar" role="toolbar" aria-label="Paint edge treatment">
               <span className="sm-paint-heading">Mark edge</span>
               {([['polish','Polish'],['no-polish','No Polish'],['miter','Miter']] as const).map(([kind,label])=><button key={kind} type="button" data-treatment={kind} aria-pressed={paintTreatment===kind} onClick={()=>{setPaintTreatment(kind);setSelectedEdge(null);setActiveRef(null)}}><span className="sm-paint-swatch"/>{label}</button>)}

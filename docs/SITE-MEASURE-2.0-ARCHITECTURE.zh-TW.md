@@ -87,3 +87,13 @@
 - 保持 Preview 分支 `feat/site-measure-v2-immersive`，不合併 `main`；實機 iPhone／Android 平板的手勢、標籤重疊及長公式仍待人手驗收。
 
 **後續優先**：P4.2 完善長公式、短邊與相鄰 Part 標籤避讓；P4.3 現場自由 Note／偏移牆線的語義與 PDF，始終區分示意線與可用於 CNC 的實測幾何。Room 仍維持可選輔助分類，不應阻擋第一次量尺。
+
+## P5.1 · Project-level Canvas Note（2026-11-07，V2 Preview）
+
+- 入口：Immersive Workspace 的 `＋` → `＋ Note · field annotation`；不用先選 Part 或 Room。點畫布指定目標 pin，直接輸入文字，按 Save 才建立正式紀錄；Cancel 不留下空白 Note。
+- 圖上顯示可拖曳備註卡片及獨立指向點（Leader Line）。拖曳只移動卡片，原來的目標點保持固定。點卡片可編輯全文、重新指定指向點（Move pin）、刪除；Undo/Redo 可還原資料異動。
+- 每個 Note 在 `Project.canvasNotes[]`，id、text、x/y（卡片世界座標）、targetX/targetY（目標點）分別保存。限 100 個 Note，每個最多 800 字；無效座標及重複 id 拒絕匯入。
+- schemaVersion 沿用 2，欄位可選以讀取歷史備份；新工程初始化空陣列。IndexedDB 自動保存、Project JSON Backup、匯入和重新開啟支援 Notes。
+- 渲染 preview 最多四行，英中混合文字按近似字寬換行；編輯器保留所有原始內容。Note 是示意註記，不是測量幾何。
+- **P5.1 範圍限制**：Canvas Note 不包含在 PDF／DXF 匯出中。PDF Export 面板明確提示這點。P5.3 需將這些備註列入 Field Report，並規劃圖面 Overview／Leader Line。現階段對外傳遞 Notes 請下載 Project JSON Backup，或在已支援的 Part/Edge Notes 裡記錄重要文字。
+- 舊專案的尺寸、Overhang、Sink、Edge Treatments、PDF/DXF 幾何不因新增或移動 Canvas Note 而改動。目標是比紙筆快，尚不新增任意 CAD 製造幾何或複雜 Room 系統。

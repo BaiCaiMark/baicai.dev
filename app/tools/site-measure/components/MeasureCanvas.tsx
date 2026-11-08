@@ -3,33 +3,40 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEv
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
 import { sinkPin } from './sink-pin'
 import { dimensionLabelLayout } from './dimension-label'
-import { edgeOrder, treatmentOf, value, type Area, type Edge } from '../core/model'
+import { canvasNoteLines, noteCardHeight, NOTE_WIDTH } from '../core/canvas-notes'
+import { edgeOrder, treatmentOf, value, type Area, type Edge, type CanvasNote } from '../core/model'
 import { projectCanvasItems } from '../core/project-canvas'
 import { edgeNames, edgeLength, finishedEdgeReading, finishedFormula } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
-type Props = { area: Area; areas: Area[]; fitRequest?: number; roomFocus?: {id:string} | null; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
+type Props = { area: Area; areas: Area[]; canvasNotes: CanvasNote[]; notePlacement?: boolean; selectedCanvasNoteId?: string | null; noteEditor?: ReactNode; onPickNoteTarget: (point: Point) => void; onCancelNotePlacement: () => void; onSelectCanvasNote: (id: string) => void; onMoveCanvasNote: (id: string, point: Point) => void; fitRequest?: number; roomFocus?: {id:string} | null; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
 const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
-export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
+export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement = false, selectedCanvasNoteId = null, noteEditor, onPickNoteTarget, onCancelNotePlacement, onSelectCanvasNote, onMoveCanvasNote, fitRequest=0, roomFocus, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
-  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;dimension:boolean;nameTap:boolean;refId:string|null;position:Point|null;handle:boolean} | null>(null)
+  const start = useRef<{x:number;y:number;noteId:string|null;notePosition:Point|null;partId:string|null;edge:Edge|null;dimension:boolean;nameTap:boolean;refId:string|null;position:Point|null;handle:boolean} | null>(null)
   const moved = useRef(false)
   const [manual,setManual]=useState<Bounds|null>(null),[ratio,setRatio]=useState(1.8)
   const [canvasSize,setCanvasSize]=useState({width:1000,height:600})
   const manualView=useRef(false)
   const [drag,setDrag]=useState<{id:string;position:Point}|null>(null)
+  const [noteDrag,setNoteDrag]=useState<{id:string;position:Point}|null>(null)
+  const liveNoteDrag=useRef<{id:string;position:Point}|null>(null)
   const [editorAnchor,setEditorAnchor]=useState<Point|null>(null)
   const lastBlankTap = useRef<{time:number;point:Point}|null>(null)
   const layout=useMemo(()=>projectCanvasItems(areas),[areas])
   const fitted=useMemo(()=>{
-    if(!layout.length)return{x:0,y:0,width:1100,height:650}
-    const x=Math.min(...layout.map(p=>p.x))-120,y=Math.min(...layout.map(p=>p.y))-150
-    return{x,y,width:Math.max(...layout.map(p=>p.x+p.width+120))-x,height:Math.max(...layout.map(p=>p.y+p.height+110))-y}
-  },[layout])
+    if(!layout.length&&!canvasNotes.length)return{x:0,y:0,width:1100,height:650}
+    const extents=[
+      ...layout.map(p=>({x:p.x,y:p.y,right:p.x+p.width,bottom:p.y+p.height})),
+      ...canvasNotes.map(n=>({x:Math.min(n.x,n.targetX),y:Math.min(n.y,n.targetY),right:Math.max(n.x+NOTE_WIDTH,n.targetX),bottom:Math.max(n.y+noteCardHeight(n.text),n.targetY)}))
+    ]
+    const x=Math.min(...extents.map(p=>p.x))-120,y=Math.min(...extents.map(p=>p.y))-150
+    return{x,y,width:Math.max(...extents.map(p=>p.right+120))-x,height:Math.max(...extents.map(p=>p.bottom+110))-y}
+  },[layout,canvasNotes])
   const fit=useMemo(()=>{
     const box={...fitted}
     if(box.width/box.height<ratio){const w=box.height*ratio;box.x-=(w-box.width)/2;box.width=w}
@@ -164,14 +171,16 @@ export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, se
     if(e.pointerType==='mouse'&&e.button!==0)return
     e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
     if(pointers.current.size===1){
-      const target=e.target as Element,handle=!!target.closest('[data-move-handle]')
+      const target=e.target as Element, noteId=notePlacement?null:(target.closest('[data-canvas-note]')?.getAttribute('data-canvas-note')??null)
+      const note=canvasNotes.find(n=>n.id===noteId)
+      const handle=!!target.closest('[data-move-handle]')
       const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??null
-      let partId=target.closest('[data-shape]')?.getAttribute('data-shape')??null
-      const dimension=!!directMode&&!!target.closest('[data-dimension]')
-      const nameTap=!!directMode&&!!target.closest('[data-part-title]')
+      let partId=noteId||notePlacement?null:(target.closest('[data-shape]')?.getAttribute('data-shape')??null)
+      const dimension=!notePlacement&&!noteId&&!!directMode&&!!target.closest('[data-dimension]')
+      const nameTap=!notePlacement&&!noteId&&!!directMode&&!!target.closest('[data-part-title]')
       let edge=target.closest('[data-dimension]')?.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
       if(!edge&&target.closest('.sm-direct-edge-name,.sm-direct-note-pin'))edge=target.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
-      if(!handle&&!dimension&&!edge&&!refId&&!nameTap){
+      if(!notePlacement&&!noteId&&!handle&&!dimension&&!edge&&!refId&&!nameTap){
         const candidates:ScreenEdge[]=[]
         // Resolve all nearby edges in screen space, independent of transparent stroke paint order.
         e.currentTarget.querySelectorAll<SVGLineElement>('.sm-edge-hit').forEach(line=>{
@@ -185,8 +194,8 @@ export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, se
       }
       const item=layout.find(p=>p.shape.id===partId)
       if(partId)lastBlankTap.current=null
-      start.current={x:e.clientX,y:e.clientY,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
-    }else{moved.current=true;start.current=null;lastBlankTap.current=null;liveDrag.current=null;setDrag(null)}
+      start.current={x:e.clientX,y:e.clientY,noteId,notePosition:note?{x:note.x,y:note.y}:null,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
+    }else{moved.current=true;start.current=null;lastBlankTap.current=null;liveDrag.current=null;setDrag(null);liveNoteDrag.current=null;setNoteDrag(null)}
     reset()
   }
   const move=(e:PointerEvent<SVGSVGElement>)=>{
@@ -196,6 +205,10 @@ export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, se
     if(start.current&&Math.hypot(e.clientX-start.current.x,e.clientY-start.current.y)>7)moved.current=true
     if(!moved.current)return
     const dx=(now.center.x-base.center.x)*base.scale,dy=(now.center.y-base.center.y)*base.scale
+    if(pointers.current.size===1&&start.current?.noteId&&start.current.notePosition&&!notePlacement){
+      const next={id:start.current.noteId,position:{x:Math.max(-10000,Math.min(10000,start.current.notePosition.x+dx)),y:Math.max(-10000,Math.min(10000,start.current.notePosition.y+dy))}}
+      liveNoteDrag.current=next;setNoteDrag(next);setManual(base.box);return
+    }
     if(pointers.current.size===1&&start.current?.partId&&!start.current.nameTap&&!(directMode&&start.current.edge)){
       // A selected part can be dragged directly from its interior. Edge taps keep measurement priority.
       if(start.current.refId||(!start.current.handle&&moving!==start.current.partId&&selected!==start.current.partId)||!start.current.position)return
@@ -238,9 +251,15 @@ export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, se
   }
   const up=(e:PointerEvent<SVGSVGElement>)=>{
     pointers.current.delete(e.pointerId)
-    if(e.type==='pointercancel'||e.type==='lostpointercapture'){start.current=null;liveDrag.current=null;setDrag(null);moved.current=true}
+    if(e.type==='pointercancel'||e.type==='lostpointercapture'){start.current=null;liveDrag.current=null;setDrag(null);liveNoteDrag.current=null;setNoteDrag(null);moved.current=true}
     else if(!pointers.current.size){
-      if(liveDrag.current){onPlace(liveDrag.current.id,liveDrag.current.position);liveDrag.current=null;setDrag(null)}
+      if(liveNoteDrag.current){onMoveCanvasNote(liveNoteDrag.current.id,liveNoteDrag.current.position);liveNoteDrag.current=null;setNoteDrag(null)}
+      else if(liveDrag.current){onPlace(liveDrag.current.id,liveDrag.current.position);liveDrag.current=null;setDrag(null)}
+      else if(!moved.current&&notePlacement){
+        const matrix=svg.current?.getScreenCTM()
+        if(matrix){const anchor=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());onPickNoteTarget({x:Math.max(-10000,Math.min(10000,anchor.x)),y:Math.max(-10000,Math.min(10000,anchor.y))})}
+      }
+      else if(!moved.current&&start.current?.noteId){onSelectCanvasNote(start.current.noteId)}
       else if(!moved.current&&start.current?.partId){
         setManual(liveBox.current)
         if(start.current.handle||moving===start.current.partId){/* Move mode owns the whole selected Part, including edges. */}
@@ -263,7 +282,7 @@ export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, se
     }
     reset()
   }
-  return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving} data-direct={!!directMode} data-painting={!!paintTreatment}>
+  return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving} data-direct={!!directMode} data-painting={!!paintTreatment} data-note-placement={notePlacement}>
     {toolbar?<div className="sm-canvas-commandbar">{toolbar}</div>:null}
     <svg ref={svg} className="sm-canvas" aria-label={'Project measurement canvas · active room '+area.name} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
       {layout.map(item=>{
@@ -327,10 +346,29 @@ export default function MeasureCanvas({ area, areas, fitRequest=0, roomFocus, se
           }}><title>Drag to move · arrow keys also work</title><rect x="-22" y="-22" width="44" height="44" rx="10"/><path d="M-12 0H12M0-12V12M-12 0l4-4M-12 0l4 4M12 0l-4-4M12 0l-4 4M0-12l-4 4M0-12l4 4M0 12l-4-4M0 12l4-4"/></g>:null}
         </g>
       })}
+      {canvasNotes.map(note=>{
+        const here=noteDrag?.id===note.id?noteDrag.position:{x:note.x,y:note.y}
+        const lines=canvasNoteLines(note.text)
+        const height=noteCardHeight(note.text)
+        return <g key={note.id} data-canvas-note={note.id} className="sm-canvas-note" data-selected={note.id===selectedCanvasNoteId}>
+          <line className="sm-canvas-note-leader" x1={note.targetX} y1={note.targetY} x2={here.x+10} y2={here.y+height/2}/>
+          <circle className="sm-canvas-note-target" cx={note.targetX} cy={note.targetY} r="7"/>
+          <g className="sm-canvas-note-card" transform={'translate('+here.x+' '+here.y+')'} role="button" tabIndex={0} aria-label={'Edit canvas note '+note.text.slice(0,45)}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();onSelectCanvasNote(note.id)}}}>
+            <rect width={NOTE_WIDTH} height={height} rx="9"/>
+            <text x="12" y="17" className="sm-canvas-note-heading">FIELD NOTE · schematic</text>
+            <text className="sm-canvas-note-text" x="12" y="39">
+              {lines.map((line,i)=><tspan key={i} x="12" dy={i===0?0:19}>{line}</tspan>)}
+            </text>
+          </g>
+        </g>
+      })}
     </svg>
     {paintToolbar}
+    {notePlacement?<div className="sm-note-placement" role="status">Tap the drawing to point your note here · <button type="button" onClick={onCancelNotePlacement}>Cancel</button></div>:null}
+    {noteEditor?<div className="sm-note-editor-slot">{noteEditor}</div>:null}
     {floatingEditor&&(selectedEdge||selectedReference)&&editorAnchor?<div className="sm-canvas-floating" style={{left:editorAnchor.x,top:editorAnchor.y}}>{floatingEditor}</div>:null}
-    {!layout.length?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
+    {!layout.length&&!canvasNotes.length&&!notePlacement?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
     <p className="sm-canvas-hint">{moving?'Move selected part · tap Done moving to measure edges':'Tap edge to measure · tap part then drag inside it to move · blank space pans · two fingers zoom'}</p>
   </div>
 }
