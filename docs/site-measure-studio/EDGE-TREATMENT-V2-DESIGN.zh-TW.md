@@ -37,3 +37,11 @@
 - 針對「只修改 treatment 不影響尺寸與 allowance」、UNDO/REDO、本機儲存/重啟恢復、旋轉/鏡射後的邊線對應、iPhone/平板觸控命中加入回歸測試。
 - PDF/DXF 如承載加工標記，必須標明 `FIELD REFERENCE / NOT MANUFACTURING APPROVAL`，並與 True Form Studio 製造圖層分離直到通過相容性與幾何驗證。
 - 此文件不宣稱本項目已完成或已推送 GitHub / Vercel。
+
+## 2026-11-07 補充決議：交付格式與製造責任邊界
+- **階段一：以 PDF 作為現場量尺的主要交付成果**。PDF 清楚傳達現場量測值、尺寸計算、參考圖形、露邊與 Polish/Miter 等加工意圖；尺寸數值應準確，模板輪廓尚不代表已通過加工幾何驗證。
+- **DXF 功能程式碼保留，不刪除**。既有 DXF 匯出可以保留作為研發／後續驗證能力；何時在正常工作流程開放或提升其地位，待真實工地案例與 True Form Studio 匯入／修圖實測後決定。
+- **Site Measure Studio 的角色：現場測量、資訊紀錄、初步形狀和加工意圖表達，提供 PDF／將來的參考 DXF。** 不負責刀路、加工 allowance、毛邊生成、製造工序確認或 CNC 核准。
+- **True Form Studio 的角色：接收並核對圖紙，確認加工幾何、Part 輪廓閉合與精度、Polish／No Polish／Miter 等製造工序，產生與驗證供下游使用的加工資料。** 現場標記須經 TFS 或人工確認才能成為製造指令。
+- 期望的未來鏈路是 **Site Measure Studio → True Form Studio 人工核對／必要修改 → Pegasus／CNC**，並非 Site Measure Studio 直接送機台。即使將來 DXF 輸出更成熟，這個審查關卡仍應保留。
+- UI／文案應避免把參考 DXF 的未核准狀態描述成「DXF 技術不足」；這是兩套產品有意的責任分工。不要讓製造層面的完整性要求阻礙現場工具盡快改善實際量尺體驗。
