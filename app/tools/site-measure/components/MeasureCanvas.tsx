@@ -185,7 +185,7 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
       start.current=null;moved.current=false;reset();return
     }
     if(pointers.current.size===1){
-      const target=e.target as Element, wallId=notePlacement?null:(target.closest('[data-wall-sketch]')?.getAttribute('data-wall-sketch')??null), noteId=notePlacement?null:(target.closest('[data-canvas-note]')?.getAttribute('data-canvas-note')??null)
+      const target=e.target as Element, wallId=notePlacement?null:((target.closest('[data-wall-sketch]')?.getAttribute('data-wall-sketch')??target.closest('[data-wall-overlay]')?.getAttribute('data-wall-overlay')??null)), noteId=notePlacement?null:(target.closest('[data-canvas-note]')?.getAttribute('data-canvas-note')??null)
       const note=canvasNotes.find(n=>n.id===noteId)
       const handle=!!target.closest('[data-move-handle]')
       const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??null
@@ -322,10 +322,9 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
     {toolbar?<div className="sm-canvas-commandbar">{toolbar}</div>:null}
     <svg ref={svg} className="sm-canvas" aria-label={'Project measurement canvas · active room '+area.name} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
       {wallSketches.map(w=><g key={w.id} data-wall-sketch={w.id} className="sm-wall-sketch" data-selected={w.id===selectedWallId}>
-        <path className="sm-wall-path" d={wallPath(w.points)}/>
+        {/* Hit area stays behind Parts so edge/dimension taps take priority. */}
         <path className="sm-wall-hit" d={wallPath(w.points)} role="button" tabIndex={0} aria-label={'Select schematic wall '+w.name}
           onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();onSelectWall(w.id)}}}/>
-        <text x={w.points[0].x+8} y={w.points[0].y-12} className="sm-wall-caption">{w.name} · schematic</text>
       </g>)}
       {wallDraft!==null?<g className="sm-wall-preview" pointerEvents="none">
         {wallDraft.length>0?<path d={wallPath([...wallDraft,...wallPreview])}/>:null}
@@ -393,6 +392,12 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
           }}><title>Drag to move · arrow keys also work</title><rect x="-22" y="-22" width="44" height="44" rx="10"/><path d="M-12 0H12M0-12V12M-12 0l4-4M-12 0l4 4M12 0l-4-4M12 0l-4 4M0-12l-4 4M0-12l4 4M0 12l-4-4M0 12l4-4"/></g>:null}
         </g>
       })}
+      {/* Schematic walls appear above the countertop fill, without stealing dimension taps. */}
+      {wallSketches.map(w=><g key={'wall-visual-'+w.id} className="sm-wall-visual" data-selected={w.id===selectedWallId} data-wall-overlay={w.id}>
+        <path className="sm-wall-path" d={wallPath(w.points)}/>
+        <path className="sm-wall-hit sm-wall-hit-top" d={wallPath(w.points)}/>
+        <text x={w.points[0].x+8} y={w.points[0].y-12} className="sm-wall-caption">{w.name} · schematic</text>
+      </g>)}
       {canvasNotes.map(note=>{
         const here=noteDrag?.id===note.id?noteDrag.position:{x:note.x,y:note.y}
         const lines=canvasNoteLines(note.text)
