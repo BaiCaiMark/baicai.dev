@@ -1,35 +1,82 @@
 'use client'
-import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
-import { edgeOrder, treatmentOf, value, type Area, type Edge } from '../core/model'
-import { edgeNames, edgeLength, worksheetLayout } from '../core/worksheet'
+import { sinkPin } from './sink-pin'
+import { dimensionLabelLayout } from './dimension-label'
+import { canvasNoteLines, noteCardHeight, NOTE_WIDTH } from '../core/canvas-notes'
+import { wallPath, WALL_MAX_POINTS } from '../core/wall-sketch'
+import { edgeOrder, treatmentOf, value, type Area, type Edge, type CanvasNote, type WallSketch } from '../core/model'
+import { projectCanvasItems } from '../core/project-canvas'
+import { edgeNames, edgeLength, finishedEdgeReading, finishedFormula } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
-type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; unit: Unit; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onPlace: (id: string, position: Point) => void }
+type Props = { area: Area; areas: Area[]; wallSketches: WallSketch[]; wallDraft: Point[] | null; wallEditor?: ReactNode; onWallStroke:(points:Point[])=>void; onSelectWall:(id:string)=>void; selectedWallId?:string|null; canvasNotes: CanvasNote[]; notePlacement?: boolean; selectedCanvasNoteId?: string | null; noteEditor?: ReactNode; onPickNoteTarget: (point: Point) => void; onCancelNotePlacement: () => void; onSelectCanvasNote: (id: string) => void; onMoveCanvasNote: (id: string, point: Point) => void; fitRequest?: number; roomFocus?: {id:string} | null; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
 const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
-export default function MeasureCanvas({ area, selected, selectedEdge, unit, moving, toolbar, onSelect, onEdge, onPlace }: Props) {
+export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wallEditor, onWallStroke, onSelectWall, selectedWallId=null, canvasNotes, notePlacement = false, selectedCanvasNoteId = null, noteEditor, onPickNoteTarget, onCancelNotePlacement, onSelectCanvasNote, onMoveCanvasNote, fitRequest=0, roomFocus, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
-  const start = useRef<{x:number;y:number;partId:string|null;edge:Edge|null;position:Point|null;handle:boolean} | null>(null)
+  const start = useRef<{x:number;y:number;wallId:string|null;noteId:string|null;notePosition:Point|null;partId:string|null;edge:Edge|null;dimension:boolean;nameTap:boolean;refId:string|null;position:Point|null;handle:boolean} | null>(null)
   const moved = useRef(false)
+  const wallStroke=useRef<{pointerId:number;points:Point[];lastScreen:Point}|null>(null)
+  const [wallPreview,setWallPreview]=useState<Point[]>([])
   const [manual,setManual]=useState<Bounds|null>(null),[ratio,setRatio]=useState(1.8)
   const [canvasSize,setCanvasSize]=useState({width:1000,height:600})
   const manualView=useRef(false)
   const [drag,setDrag]=useState<{id:string;position:Point}|null>(null)
-  const [snapEnabled,setSnapEnabled]=useState(true),[orthoEnabled,setOrthoEnabled]=useState(false)
-  const layout=useMemo(()=>worksheetLayout(area.shapes),[area.shapes])
+  const [noteDrag,setNoteDrag]=useState<{id:string;position:Point}|null>(null)
+  const liveNoteDrag=useRef<{id:string;position:Point}|null>(null)
+  const [editorAnchor,setEditorAnchor]=useState<Point|null>(null)
+  const lastBlankTap = useRef<{time:number;point:Point}|null>(null)
+  const layout=useMemo(()=>projectCanvasItems(areas),[areas])
   const fitted=useMemo(()=>{
-    if(!layout.length)return{x:0,y:0,width:1100,height:650}
-    const x=Math.min(...layout.map(p=>p.x))-120,y=Math.min(...layout.map(p=>p.y))-150
-    return{x,y,width:Math.max(...layout.map(p=>p.x+p.width+120))-x,height:Math.max(...layout.map(p=>p.y+p.height+110))-y}
-  },[layout])
-  const fit={...fitted}
-  if(fit.width/fit.height<ratio){const w=fit.height*ratio;fit.x-=(w-fit.width)/2;fit.width=w}
-  else{const h=fit.width/ratio;fit.y-=(h-fit.height)/2;fit.height=h}
+    if(!layout.length&&!canvasNotes.length&&!wallSketches.length)return{x:0,y:0,width:1100,height:650}
+    const extents=[
+      ...layout.map(p=>({x:p.x,y:p.y,right:p.x+p.width,bottom:p.y+p.height})),
+      ...canvasNotes.map(n=>({x:Math.min(n.x,n.targetX),y:Math.min(n.y,n.targetY),right:Math.max(n.x+NOTE_WIDTH,n.targetX),bottom:Math.max(n.y+noteCardHeight(n.text),n.targetY)})),
+      ...wallSketches.flatMap(w=>w.points.map(p=>({x:p.x,y:p.y,right:p.x,bottom:p.y})))
+    ]
+    const x=Math.min(...extents.map(p=>p.x))-120,y=Math.min(...extents.map(p=>p.y))-150
+    return{x,y,width:Math.max(...extents.map(p=>p.right+120))-x,height:Math.max(...extents.map(p=>p.bottom+110))-y}
+  },[layout,canvasNotes,wallSketches])
+  const fit=useMemo(()=>{
+    const box={...fitted}
+    if(box.width/box.height<ratio){const w=box.height*ratio;box.x-=(w-box.width)/2;box.width=w}
+    else{const h=box.width/ratio;box.y-=(h-box.height)/2;box.height=h}
+    return box
+  },[fitted,ratio])
   const box=manual??fit,liveBox=useRef(box),liveDrag=useRef(drag)
+  const firstRoom=useRef(area.id),initialFocused=useRef(false),previousFit=useRef(fitRequest),previousRoomFocus=useRef(roomFocus)
+  const roomBox=useCallback((id:string):Bounds|null=>{
+    const items=layout.filter(item=>item.areaId===id)
+    if(!items.length)return null
+    const x=Math.min(...items.map(p=>p.x))-120,y=Math.min(...items.map(p=>p.y))-150
+    const b={x,y,width:Math.max(...items.map(p=>p.x+p.width+120))-x,height:Math.max(...items.map(p=>p.y+p.height+110))-y}
+    if(b.width/b.height<ratio){const w=b.height*ratio;b.x-=(w-b.width)/2;b.width=w}
+    else{const h=b.width/ratio;b.y-=(h-b.height)/2;b.height=h}
+    return b
+  },[layout,ratio])
+  useLayoutEffect(()=>{
+    if(initialFocused.current)return
+    const b=roomBox(firstRoom.current)
+    if(!b)return
+    const frame=requestAnimationFrame(()=>{initialFocused.current=true;liveBox.current=b;setManual(b)})
+    return()=>cancelAnimationFrame(frame)
+  },[roomBox])
+  useLayoutEffect(()=>{
+    if(!roomFocus||roomFocus===previousRoomFocus.current)return
+    const b=roomBox(roomFocus.id)
+    if(!b)return
+    const frame=requestAnimationFrame(()=>{previousRoomFocus.current=roomFocus;liveBox.current=b;setManual(b)})
+    return()=>cancelAnimationFrame(frame)
+  },[roomFocus,roomBox])
+  useLayoutEffect(()=>{
+    if(previousFit.current===fitRequest)return
+    const frame=requestAnimationFrame(()=>{previousFit.current=fitRequest;liveBox.current=fit;setManual(null)})
+    return()=>cancelAnimationFrame(frame)
+  },[fitRequest,fit])
   const screenScale=Math.max(box.width/Math.max(1,canvasSize.width),box.height/Math.max(1,canvasSize.height))
   useLayoutEffect(()=>{liveBox.current=box;liveDrag.current=drag;manualView.current=manual!==null},[box,drag,manual])
   useLayoutEffect(()=>{
@@ -81,6 +128,39 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
     const observer=new ResizeObserver(reveal),editor=document.querySelector('.sm-context');if(editor)observer.observe(editor)
     return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener('resize',reveal);window.visualViewport?.removeEventListener('resize',reveal);window.visualViewport?.removeEventListener('scroll',reveal)}
   },[edgePart,edgeName])
+  useLayoutEffect(()=>{
+    if(!floatingEditor||(!selectedEdge&&!selectedReference))return
+    const node=svg.current,outer=shell.current
+    if(!node||!outer)return
+    const line=selectedEdge?[...node.querySelectorAll<SVGLineElement>('.sm-edge-hit')].find(l=>l.closest('[data-shape]')?.getAttribute('data-shape')===selectedEdge.partId&&l.closest('[data-edge]')?.getAttribute('data-edge')===selectedEdge.edge):null
+    const marker=selectedReference?[...node.querySelectorAll<SVGGElement>('[data-sink-ref]')].find(n=>n.getAttribute('data-sink-ref')===selectedReference):null
+    const m=line?.getScreenCTM()??marker?.getScreenCTM()
+    if(!m)return
+    const point=line?new DOMPoint((line.x1.baseVal.value+line.x2.baseVal.value)/2,(line.y1.baseVal.value+line.y2.baseVal.value)/2).matrixTransform(m):new DOMPoint(0,0).matrixTransform(m)
+    const root=outer.getBoundingClientRect(),popupWidth=Math.min(318,root.width-16),popupHeight=Math.min(348,root.height*.76)
+    const x=Math.max(8,Math.min(root.width-popupWidth-8,point.x-root.left-popupWidth/2))
+    const desired=point.y-root.top-popupHeight-12
+    const y=Math.max(6,Math.min(root.height-popupHeight-6,desired>54?desired:point.y-root.top+12))
+    setEditorAnchor(prev=>prev&&Math.abs(prev.x-x)<.5&&Math.abs(prev.y-y)<.5?prev:{x,y})
+  },[selectedEdge,selectedReference,box,layout,floatingEditor])
+  // When the editing label sits low on a phone, keep its floating editor visible
+  // above the mobile browser chrome / soft keyboard without changing drawing scale.
+  useLayoutEffect(()=>{
+    if(!editorAnchor)return
+    const reveal=()=>{
+      const panel=shell.current?.querySelector<HTMLElement>('.sm-canvas-floating')
+      if(!panel)return
+      const viewport=window.visualViewport
+      const top=viewport?.offsetTop??0
+      const bottom=top+(viewport?.height??window.innerHeight)
+      const rect=panel.getBoundingClientRect()
+      if(rect.bottom>bottom-12)window.scrollBy({top:rect.bottom-bottom+12,behavior:'instant'})
+      else if(rect.top<top+12)window.scrollBy({top:rect.top-top-12,behavior:'instant'})
+    }
+    const frame=requestAnimationFrame(reveal)
+    window.visualViewport?.addEventListener('resize',reveal)
+    return()=>{cancelAnimationFrame(frame);window.visualViewport?.removeEventListener('resize',reveal)}
+  },[editorAnchor,edgePart,edgeName,selectedReference])
   const center=()=>{
     const ps=[...pointers.current.values()]
     return{center:{x:ps.reduce((s,p)=>s+p.x,0)/ps.length,y:ps.reduce((s,p)=>s+p.y,0)/ps.length},distance:ps.length>1?Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y):0}
@@ -94,11 +174,27 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
   const down=(e:PointerEvent<SVGSVGElement>)=>{
     if(e.pointerType==='mouse'&&e.button!==0)return
     e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    if(wallDraft!==null&&pointers.current.size===1){
+      const matrix=svg.current?.getScreenCTM()
+      if(matrix){
+        const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse())
+        const startPoint={x:p.x,y:p.y}
+        wallStroke.current={pointerId:e.pointerId,points:[startPoint],lastScreen:{x:e.clientX,y:e.clientY}}
+        setWallPreview([startPoint])
+      }
+      start.current=null;moved.current=false;reset();return
+    }
     if(pointers.current.size===1){
-      const target=e.target as Element,handle=!!target.closest('[data-move-handle]')
-      let partId=target.closest('[data-shape]')?.getAttribute('data-shape')??null
+      const target=e.target as Element, wallId=notePlacement?null:((target.closest('[data-wall-sketch]')?.getAttribute('data-wall-sketch')??target.closest('[data-wall-overlay]')?.getAttribute('data-wall-overlay')??null)), noteId=notePlacement?null:(target.closest('[data-canvas-note]')?.getAttribute('data-canvas-note')??null)
+      const note=canvasNotes.find(n=>n.id===noteId)
+      const handle=!!target.closest('[data-move-handle]')
+      const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??null
+      let partId=noteId||wallId||notePlacement?null:(target.closest('[data-shape]')?.getAttribute('data-shape')??null)
+      const dimension=!notePlacement&&!noteId&&!!directMode&&!!target.closest('[data-dimension]')
+      const nameTap=!notePlacement&&!noteId&&!!directMode&&!!target.closest('[data-part-title]')
       let edge=target.closest('[data-dimension]')?.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
-      if(!handle&&!edge){
+      if(!edge&&target.closest('.sm-direct-edge-name,.sm-direct-note-pin'))edge=target.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
+      if(!notePlacement&&!noteId&&!wallId&&!handle&&!dimension&&!edge&&!refId&&!nameTap){
         const candidates:ScreenEdge[]=[]
         // Resolve all nearby edges in screen space, independent of transparent stroke paint order.
         e.currentTarget.querySelectorAll<SVGLineElement>('.sm-edge-hit').forEach(line=>{
@@ -111,20 +207,38 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
         if(hit){partId=hit.partId;edge=hit.edge}
       }
       const item=layout.find(p=>p.shape.id===partId)
-      start.current={x:e.clientX,y:e.clientY,partId,edge,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
-    }else{moved.current=true;start.current=null;liveDrag.current=null;setDrag(null)}
+      if(partId)lastBlankTap.current=null
+      start.current={x:e.clientX,y:e.clientY,wallId,noteId,notePosition:note&&!!target.closest('.sm-canvas-note-card')?{x:note.x,y:note.y}:null,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
+    }else{moved.current=true;start.current=null;lastBlankTap.current=null;liveDrag.current=null;setDrag(null);liveNoteDrag.current=null;setNoteDrag(null);wallStroke.current=null;setWallPreview([])}
     reset()
   }
   const move=(e:PointerEvent<SVGSVGElement>)=>{
     if(!pointers.current.has(e.pointerId)||!gesture.current)return
     pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    if(wallDraft!==null&&pointers.current.size===1&&wallStroke.current?.pointerId===e.pointerId){
+      const stroke=wallStroke.current
+      if(Math.hypot(e.clientX-stroke.lastScreen.x,e.clientY-stroke.lastScreen.y)>8&&stroke.points.length<WALL_MAX_POINTS){
+        const matrix=svg.current?.getScreenCTM()
+        if(matrix){
+          const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse())
+          stroke.points.push({x:p.x,y:p.y})
+          stroke.lastScreen={x:e.clientX,y:e.clientY}
+          setWallPreview([...stroke.points])
+        }
+      }
+      return
+    }
     const base=gesture.current,now=center()
     if(start.current&&Math.hypot(e.clientX-start.current.x,e.clientY-start.current.y)>7)moved.current=true
     if(!moved.current)return
     const dx=(now.center.x-base.center.x)*base.scale,dy=(now.center.y-base.center.y)*base.scale
-    if(pointers.current.size===1&&start.current?.partId){
+    if(pointers.current.size===1&&start.current?.noteId&&start.current.notePosition&&!notePlacement){
+      const next={id:start.current.noteId,position:{x:Math.max(-10000,Math.min(10000,start.current.notePosition.x+dx)),y:Math.max(-10000,Math.min(10000,start.current.notePosition.y+dy))}}
+      liveNoteDrag.current=next;setNoteDrag(next);setManual(base.box);return
+    }
+    if(pointers.current.size===1&&start.current?.partId&&!start.current.nameTap&&!(directMode&&start.current.edge)){
       // A selected part can be dragged directly from its interior. Edge taps keep measurement priority.
-      if((!start.current.handle&&moving!==start.current.partId&&selected!==start.current.partId)||!start.current.position)return
+      if(start.current.refId||(!start.current.handle&&moving!==start.current.partId&&selected!==start.current.partId)||!start.current.position)return
       let moveX=dx,moveY=dy
       if((orthoEnabled||e.shiftKey)&&!start.current.handle){
         if(Math.abs(e.clientX-start.current.x)>=Math.abs(e.clientY-start.current.y))moveY=0
@@ -163,44 +277,94 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
     liveBox.current=next;setManual(next)
   }
   const up=(e:PointerEvent<SVGSVGElement>)=>{
+    if(wallDraft!==null&&wallStroke.current?.pointerId===e.pointerId){
+      const stroke=wallStroke.current
+      const canCommit=e.type==='pointerup'&&pointers.current.size===1
+      wallStroke.current=null;setWallPreview([])
+      pointers.current.delete(e.pointerId)
+      if(canCommit)onWallStroke(stroke.points)
+      reset();return
+    }
     pointers.current.delete(e.pointerId)
-    if(e.type==='pointercancel'||e.type==='lostpointercapture'){start.current=null;liveDrag.current=null;setDrag(null);moved.current=true}
+    if(e.type==='pointercancel'||e.type==='lostpointercapture'){start.current=null;liveDrag.current=null;setDrag(null);liveNoteDrag.current=null;setNoteDrag(null);moved.current=true}
     else if(!pointers.current.size){
-      if(liveDrag.current){onPlace(liveDrag.current.id,liveDrag.current.position);liveDrag.current=null;setDrag(null)}
+      if(liveNoteDrag.current){onMoveCanvasNote(liveNoteDrag.current.id,liveNoteDrag.current.position);liveNoteDrag.current=null;setNoteDrag(null)}
+      else if(liveDrag.current){onPlace(liveDrag.current.id,liveDrag.current.position);liveDrag.current=null;setDrag(null)}
+      else if(!moved.current&&notePlacement){
+        const matrix=svg.current?.getScreenCTM()
+        if(matrix){const anchor=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());onPickNoteTarget({x:Math.max(-10000,Math.min(10000,anchor.x)),y:Math.max(-10000,Math.min(10000,anchor.y))})}
+      }
+      else if(!moved.current&&start.current?.noteId){onSelectCanvasNote(start.current.noteId)}
+      else if(!moved.current&&start.current?.wallId){onSelectWall(start.current.wallId)}
       else if(!moved.current&&start.current?.partId){
         setManual(liveBox.current)
         if(start.current.handle||moving===start.current.partId){/* Move mode owns the whole selected Part, including edges. */}
+        else if(start.current.nameTap)onRename?.(start.current.partId)
+        else if(start.current.refId)onReference?.(start.current.partId,start.current.refId)
+        else if(start.current.edge&&start.current.dimension)onDimension?.({partId:start.current.partId,edge:start.current.edge})
         else if(start.current.edge)onEdge({partId:start.current.partId,edge:start.current.edge})
         else onSelect(start.current.partId)
       }
+      else if(!moved.current&&start.current&&!start.current.partId){
+        // Only a stationary double-tap on empty canvas recenters the entire drawing.
+        // Shape, edge, dimension and two-finger gestures never trigger Fit All.
+        const now=performance.now(),previous=lastBlankTap.current
+        const point={x:e.clientX,y:e.clientY}
+        if(previous&&now-previous.time<340&&Math.hypot(point.x-previous.point.x,point.y-previous.point.y)<30){
+          manualView.current=false;setManual(null);lastBlankTap.current=null
+        }else lastBlankTap.current={time:now,point}
+      }else lastBlankTap.current=null
       start.current=null
     }
     reset()
   }
-  const zoom=(factor:number)=>{const b=liveBox.current;setManual({x:b.x+b.width*(1-factor)/2,y:b.y+b.height*(1-factor)/2,width:b.width*factor,height:b.height*factor})}
-  return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving}>
-    <div className="sm-canvas-commandbar">{toolbar}<div className="sm-canvas-tools"><button aria-pressed={snapEnabled} onClick={()=>setSnapEnabled(v=>!v)} title="Align nearby part edges">Snap</button><button aria-pressed={orthoEnabled} onClick={()=>setOrthoEnabled(v=>!v)} title="Move strictly along one axis">Ortho</button><button onClick={()=>zoom(.8)} aria-label="Zoom in">＋</button><button onClick={()=>zoom(1.25)} aria-label="Zoom out">−</button><button onClick={()=>setManual(null)}>Fit All</button></div></div>
-    <svg ref={svg} className="sm-canvas" aria-label={area.name+' measurement worksheet'} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
+  return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving} data-direct={!!directMode} data-painting={!!paintTreatment} data-note-placement={notePlacement} data-wall-drawing={wallDraft!==null}>
+    {toolbar?<div className="sm-canvas-commandbar">{toolbar}</div>:null}
+    <svg ref={svg} className="sm-canvas" aria-label={'Project measurement canvas · active room '+area.name} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
+      {wallSketches.map(w=><g key={w.id} data-wall-sketch={w.id} className="sm-wall-sketch" data-selected={w.id===selectedWallId}>
+        {/* Hit area stays behind Parts so edge/dimension taps take priority. */}
+        <path className="sm-wall-hit" d={wallPath(w.points)} role="button" tabIndex={0} aria-label={'Select schematic wall '+w.name}
+          onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();onSelectWall(w.id)}}}/>
+      </g>)}
+      {wallDraft!==null?<g className="sm-wall-preview" pointerEvents="none">
+        {wallDraft.length>0?<path d={wallPath([...wallDraft,...wallPreview])}/>:null}
+        {wallDraft.length===0&&wallPreview.length>0?<path d={wallPath(wallPreview)}/>:null}
+        {wallDraft.length>0?<circle cx={wallDraft[wallDraft.length-1].x} cy={wallDraft[wallDraft.length-1].y} r="6"/>:null}
+      </g>:null}
       {layout.map(item=>{
         const {shape,points,local}=item,position=drag?.id===shape.id?drag.position:{x:item.x,y:item.y},g=calculate(shape)
         const sign=polygonArea(points)>0?1:-1
-        return <g key={shape.id} data-shape={shape.id} transform={'translate('+position.x+' '+position.y+')'}>
-          <text x="0" y="-78" className="sm-part-title">{shape.name.length>36?shape.name.slice(0,35)+'…':shape.name}</text>
-          <text x="0" y="-57" className="sm-part-caption">{item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements'}{shape.notes||shape.fieldRecords.length?' · notes / checks in Edit':''}</text>
+        return <g key={shape.id} data-shape={shape.id} data-room={item.areaId} transform={'translate('+position.x+' '+position.y+')'}>
+          <text x="0" y={directMode?"-110":"-78"} className="sm-part-title" data-part-title={directMode?'true':undefined} role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Rename part '+shape.name:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onRename?.(shape.id)}}}>{shape.name.length>36?shape.name.slice(0,35)+'…':shape.name}</text>
+          <text x="0" y={directMode?"-86":"-57"} className="sm-part-caption">{(areas.length>1?item.areaName+' · ':'')+(directMode?(g.top?'Finished':'Finished · incomplete'):(item.guide?'Incomplete · template not to scale':shape.basis==='cabinet'?'Cabinet + overhangs':'Finished measurements'))}{!directMode&&(shape.notes||shape.fieldRecords.length)?' · notes / checks in Edit':''}</text>
           <path className={item.guide?'sm-template-guide':'sm-top'} data-selected={selected===shape.id} d={path(points)} role="button" tabIndex={0} aria-label={'Part '+shape.name} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(shape.id)}}}/>
           {shape.basis==='cabinet'&&g.base?<path className="sm-cabinet" d={path(g.base.map(local))}/>:null}
-          {item.guide?<text x={item.width/2} y={item.height/2} className="sm-guide-watermark" textAnchor="middle">MEASURE EDGES</text>:null}
+          {item.guide&&!directMode?<text x={item.width/2} y={item.height/2} className="sm-guide-watermark" textAnchor="middle">MEASURE EDGES</text>:null}
           {edgeOrder(shape).map((edge,i)=>{
             const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=sign*dy/len,ny=-sign*dx/len
             const offset=34,la={x:a.x+nx*offset,y:a.y+ny*offset},lb={x:b.x+nx*offset,y:b.y+ny*offset},mid={x:(la.x+lb.x)/2,y:(la.y+lb.y)/2}
-            const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge,n=edgeLength(shape,edge,!!g.top)
+            const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge
+            // Cabinet measurements may be used to solve the outline, but must never be displayed as finished dimensions.
+            const n=directMode?finishedEdgeReading(shape,edge):(g.top?edgeLength(shape,edge):shape.basis==='finished'?edgeLength(shape,edge,false):null)
+            const formula=directMode?finishedFormula(shape,edge,unit):null
+            const label=dimensionLabelLayout(a,b,!!formula)
+            const labelCenter={x:mid.x+nx*label.lift,y:mid.y+ny*label.lift}
+            const radians=label.angle*Math.PI/180
+            const noteSide=nx*(-Math.sin(radians))+ny*Math.cos(radians)>=0?1:-1
             return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active} data-treatment={treatmentOf(shape,edge)??"unset"}>
+              <line className="sm-edge-selection-halo" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-edge-highlight" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
               <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
               {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
-              <rect data-dimension="true" className="sm-label-bg" x={mid.x-52} y={mid.y-15} width="104" height="30" rx="6"/>
-              <text className="sm-edge-value" x={mid.x} y={mid.y+6} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
               <line className="sm-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
+              {label.lift>0?<line className="sm-dimension-leader" x1={mid.x} y1={mid.y} x2={labelCenter.x} y2={labelCenter.y}/>:null}
+              <g className="sm-dimension-label" data-dimension-label="true" data-label-angle={label.angle} data-short-edge={label.lift>0}
+                transform={'translate('+labelCenter.x+' '+labelCenter.y+') rotate('+label.angle+')'}>
+                <rect data-dimension="true" className="sm-label-bg" x={-label.width/2} y={-label.height/2} width={label.width} height={label.height} rx="6" role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Edit finished dimension '+shape.name+' '+edge:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onDimension?.({partId:shape.id,edge})}}}/>
+                {formula?<text className="sm-edge-formula" x="0" y="-6" textAnchor="middle">{formula}</text>:null}
+                <text className="sm-edge-value" x="0" y={formula?15:6} textAnchor="middle">{n===null?'?':formatLength(n,unit).replace('待量 / Unknown','?')}</text>
+                {shape.fieldRecords.filter(r=>r.kind==='note'&&r.edge===edge&&r.text.trim()).slice(0,1).map(r=><text key={r.id} className="sm-direct-note-pin" textAnchor="middle" x="0" y={noteSide*(label.height/2+31)}>{r.kind==='note'?'✎ '+r.text.slice(0,24)+(r.text.length>24?'…':''):''}</text>)}
+              </g>
             </g>
           })}
           {g.top?shape.references.map(ref=>{
@@ -208,17 +372,59 @@ export default function MeasureCanvas({ area, selected, selectedEdge, unit, movi
             return <g key={ref.id} className="sm-reference">
               {rg.lines.map((l,i)=>{const a=local(l.a),b=local(l.b);return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>})}
               {rg.point?<circle cx={local(rg.point).x} cy={local(rg.point).y} r="5"/>:null}
-              {rg.lines[0]?<text x={local(rg.lines[0].a).x+8} y={local(rg.lines[0].a).y+24}>{ref.kind==='sink'?'Sink Center':'Cooktop'}{value(ref.y)===null?' · Y unknown':value(ref.x)===null?' · X unknown':''}</text>:null}
+              {rg.lines[0]&&(!directMode||ref.kind!=='sink')?<text x={local(rg.lines[0].a).x+8} y={local(rg.lines[0].a).y+24}>{ref.kind==='sink'?'Sink Center':'Cooktop'}{value(ref.y)===null?' · Y unknown':value(ref.x)===null?' · X unknown':''}</text>:null}
             </g>
           }):null}
-          {selected===shape.id?<g data-move-handle="true" className="sm-move-handle" role="button" tabIndex={0} aria-label={'Drag '+shape.name} transform={'translate('+(item.width+30*screenScale)+' '+(-55*screenScale)+') scale('+screenScale+')'} onKeyDown={e=>{
+          {shape.references.map(ref=>{
+            const rg=g.top?referenceGeometry(ref,shape,g):null
+            const point=rg?.point?local(rg.point):ref.kind==='sink'?sinkPin(ref,shape,g,local,item.width,item.height):{x:item.width*.5,y:item.height*.5}
+            const positioned=ref.kind==='sink'?value(ref.x)!==null:!!rg?.point
+            const sinkNumber=shape.references.filter(r=>r.kind==='sink').findIndex(r=>r.id===ref.id)+1
+            return <g key={'pin-'+ref.id} className="sm-direct-sink-pin" data-sink-ref={ref.id} data-x-only={ref.kind==='sink'&&value(ref.y)===null} transform={'translate('+point.x+' '+point.y+')'} role="button" tabIndex={0}
+              aria-label={'Edit '+(ref.kind==='sink'?'Sink Center':'Cooktop')+' location'} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onReference?.(shape.id,ref.id)}}}>
+              <rect x="-38" y="-18" width="76" height="36" rx="8"/>
+              <text textAnchor="middle" y="5">{ref.kind==='sink'?'S'+sinkNumber+' '+(positioned?formatLength(value(ref.x),unit):'?'):'Cooktop'}{ref.kind==='sink'?'':positioned?'':' ?'}</text>
+            </g>
+          })}
+          {selected===shape.id&&!directMode?<g data-move-handle="true" className="sm-move-handle" role="button" tabIndex={0} aria-label={'Drag '+shape.name} transform={'translate('+(item.width+30*screenScale)+' '+(-55*screenScale)+') scale('+screenScale+')'} onKeyDown={e=>{
             const direction=({ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1}} as Record<string,Point>)[e.key]
             if(direction){e.preventDefault();setManual(liveBox.current);const step=(e.shiftKey?40:10)*screenScale;onPlace(shape.id,{x:Math.max(-10000,Math.min(10000,item.x+direction.x*step)),y:Math.max(-10000,Math.min(10000,item.y+direction.y*step))})}
           }}><title>Drag to move · arrow keys also work</title><rect x="-22" y="-22" width="44" height="44" rx="10"/><path d="M-12 0H12M0-12V12M-12 0l4-4M-12 0l4 4M12 0l-4-4M12 0l-4 4M0-12l-4 4M0-12l4 4M0 12l-4-4M0 12l4-4"/></g>:null}
         </g>
       })}
+      {/* Schematic walls appear above the countertop fill, without stealing dimension taps. */}
+      {wallSketches.map(w=><g key={'wall-visual-'+w.id} className="sm-wall-visual" data-selected={w.id===selectedWallId} data-wall-overlay={w.id}>
+        <path className="sm-wall-path" d={wallPath(w.points)}/>
+        <path className="sm-wall-hit sm-wall-hit-top" d={wallPath(w.points)}/>
+        <text x={w.points[0].x+8} y={w.points[0].y-12} className="sm-wall-caption">{w.name} · schematic</text>
+      </g>)}
+      {canvasNotes.map(note=>{
+        const here=noteDrag?.id===note.id?noteDrag.position:{x:note.x,y:note.y}
+        const lines=canvasNoteLines(note.text)
+        const height=noteCardHeight(note.text)
+        return <g key={note.id} data-canvas-note={note.id} className="sm-canvas-note" data-selected={note.id===selectedCanvasNoteId}>
+          <line className="sm-canvas-note-leader" x1={note.targetX} y1={note.targetY} x2={here.x+10} y2={here.y+height/2}/>
+          <line className="sm-canvas-note-leader-hit" data-note-leader-hit="true" x1={note.targetX} y1={note.targetY} x2={here.x+10} y2={here.y+height/2}
+            role="button" tabIndex={0} aria-label={'Edit note from leader '+note.text.slice(0,45)}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();onSelectCanvasNote(note.id)}}}/>
+          <circle className="sm-canvas-note-target" cx={note.targetX} cy={note.targetY} r="7"/>
+          <g className="sm-canvas-note-card" transform={'translate('+here.x+' '+here.y+')'} role="button" tabIndex={0} aria-label={'Edit canvas note '+note.text.slice(0,45)}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();onSelectCanvasNote(note.id)}}}>
+            <rect width={NOTE_WIDTH} height={height} rx="9"/>
+            <text x="12" y="17" className="sm-canvas-note-heading">FIELD NOTE · schematic</text>
+            <text className="sm-canvas-note-text" x="12" y="39">
+              {lines.map((line,i)=><tspan key={i} x="12" dy={i===0?0:19}>{line}</tspan>)}
+            </text>
+          </g>
+        </g>
+      })}
     </svg>
-    {!layout.length?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
+    {paintToolbar}
+    {wallEditor?<div className="sm-wall-editor-slot">{wallEditor}</div>:null}
+    {notePlacement?<div className="sm-note-placement" role="status">Tap the drawing to point your note here · <button type="button" onClick={onCancelNotePlacement}>Cancel</button></div>:null}
+    {noteEditor?<div className="sm-note-editor-slot">{noteEditor}</div>:null}
+    {floatingEditor&&(selectedEdge||selectedReference)&&editorAnchor?<div className="sm-canvas-floating" style={{left:editorAnchor.x,top:editorAnchor.y}}>{floatingEditor}</div>:null}
+    {!layout.length&&!canvasNotes.length&&!wallSketches.length&&!notePlacement&&wallDraft===null?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
     <p className="sm-canvas-hint">{moving?'Move selected part · tap Done moving to measure edges':'Tap edge to measure · tap part then drag inside it to move · blank space pans · two fingers zoom'}</p>
   </div>
 }

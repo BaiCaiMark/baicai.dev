@@ -1,7 +1,10 @@
 import { jsPDF } from 'jspdf'
-import { bounds, referenceGeometry, transformPoint, type Point, type Snapshot } from './geometry'
-import { edgeOrder } from './model'
+import { bounds, calculate, referenceGeometry, type Point, type Snapshot } from './geometry'
+import { edgeOrder, treatmentOf, value } from './model'
 import { formatLength } from './units'
+import { adoptSharedCanvas, projectCanvasItems } from './project-canvas'
+import { finishedEdgeReading } from './worksheet'
+import { canvasNoteLines, noteCardHeight, NOTE_WIDTH } from './canvas-notes'
 
 export async function loadPdfFont(): Promise<Uint8Array> {
   const response = await fetch('/fonts/site-measure/NotoSansTC-Regular.ttf')
@@ -13,112 +16,223 @@ function binary(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i += 8192) result += String.fromCharCode(...bytes.subarray(i, i + 8192))
   return result
 }
+
+type Rgb = [number, number, number]
+const green: Rgb = [38, 91, 78]
+const red: Rgb = [172, 65, 52]
+const orange: Rgb = [172, 94, 35]
+const textColor: Rgb = [34, 49, 44]
+const white: Rgb = [255, 255, 255]
+const inBounds = (p: Point) => Number.isFinite(p.x) && Number.isFinite(p.y)
+
+/**
+ * Minimal field drawing, not a fabrication sheet.
+ * The PDF uses the shared *visual* workspace, never CNC positions.
+ * Wall sketches and canvas notes stay schematic and are NOT added to DXF.
+ */
 export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array {
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', putOnlyUsedFonts: true, compress: true })
+  const { project } = snapshot
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', putOnlyUsedFonts: true, compress: true })
   pdf.addFileToVFS('NotoSansTC.ttf', binary(fontBytes))
   pdf.addFont('NotoSansTC.ttf', 'NotoTC', 'normal')
   pdf.setFont('NotoTC')
-  pdf.setProperties({ title: snapshot.project.name + ' - Site Measure Studio', subject: 'Field measurements; not manufacturing approval', creator: 'Site Measure Studio' })
-  const font = pdf.getFont()
-  // Never silently drop unsupported characters (including emoji) from field notes.
-  const cmap = (font.metadata as { cmap?: { unicode?: { codeMap?: Record<number, number> } } }).cmap?.unicode?.codeMap
-  const allText = [snapshot.project.name, ...snapshot.entries.flatMap(e => [e.area.name, e.area.notes, e.shape.name, e.shape.notes, ...e.rows.flatMap(r => [r.label, r.text]), ...e.geometry.errors, ...e.geometry.warnings])].join('')
+  pdf.setProperties({ title: project.name + ' - Field Drawing', subject: 'Schematic field measurements - NOT CNC approval', creator: 'Site Measure Studio' })
+
+  // Old room-local projects are placed in a shared visual workspace before printing.
+  // This copy leaves original measurements, backup and CNC geometry untouched.
+  const drawingProject = adoptSharedCanvas(project)
+  const parts = projectCanvasItems(drawingProject.areas)
+  const notes = project.canvasNotes ?? []
+  const walls = project.wallSketches ?? []
+  const strings = [project.name, ...parts.flatMap(p => [p.areaName, p.shape.name]), ...notes.map(n => n.text), ...walls.map(w => w.name)]
+  const cmap = (pdf.getFont().metadata as { cmap?: { unicode?: { codeMap?: Record<number, number> } } }).cmap?.unicode?.codeMap
   if (cmap) {
-    const missing = [...new Set(Array.from(allText).filter(c => c.trim() && !cmap[c.codePointAt(0)!]))]
+    const missing = [...new Set(Array.from(strings.join('')).filter(c => c.trim() && !cmap[c.codePointAt(0)!]))]
     if (missing.length) throw new Error('PDF 字型不支援這些字元，請替換後重試：' + missing.slice(0, 12).join(' '))
   }
-  let y = 0
-  let sectionTitle = snapshot.project.name
-  const header = (title: string) => {
-    pdf.setTextColor(24, 33, 31); pdf.setFontSize(15); pdf.text('Site Measure Studio', 14, 16)
-    pdf.setFontSize(10)
-    const titles = pdf.splitTextToSize(title, 180) as string[]
-    pdf.text(titles, 14, 24)
-    const bottom = 24 + Math.max(titles.length - 1, 0) * 5
-    pdf.setDrawColor(160); pdf.line(14, bottom + 4, 196, bottom + 4)
-    y = bottom + 12
+
+  // Canvas coordinates have no surveying significance, but all drawings, notes and
+  // sketches share them. Keep their relative placement instead of re-layout per Part.
+  const framing: Point[] = []
+  for (const part of parts) {
+    const { x, y } = part
+    framing.push(...part.points.map(p => ({ x: x + p.x, y: y + p.y })))
+    framing.push({ x: x - 95, y: y - 185 }, { x: x + part.width + 95, y: y + part.height + 95 })
   }
-  const next = (title: string) => { pdf.addPage(); header(title) }
-  const paragraph = (text: string, color: [number, number, number] = [35, 45, 41]) => {
-    pdf.setFontSize(10); pdf.setTextColor(...color)
-    const lines = pdf.splitTextToSize(text || '—', 180) as string[]
-    for (const line of lines) {
-      if (y > 274) next(sectionTitle + ' / continued 續頁')
-      pdf.text(line, 14, y); y += 5.5
-    }
-    y += 2
+  for (const wall of walls) framing.push(...wall.points)
+  for (const note of notes) {
+    framing.push({ x: note.targetX, y: note.targetY }, { x: note.x, y: note.y },
+      { x: note.x + NOTE_WIDTH, y: note.y + noteCardHeight(note.text) })
   }
-  header(snapshot.project.name + ' / revision ' + snapshot.project.revision)
-  paragraph('現場量尺記錄 / Field measurements')
-  paragraph('本文件不是加工核准。90° 為正交模板；未知、假設及未確認項目須複核。', [135, 72, 19])
-  paragraph('圖面依頁面縮放，非 1:1。以標示數值為準。形狀排版位置不代表現場相對位置。')
-  paragraph('顯示單位：' + (snapshot.project.unit === 'in' ? 'inch' : 'mm') + '；DXF 座標單位：mm。')
-  paragraph('保存版本時間：' + snapshot.project.updatedAt)
-  paragraph('幾何完成不代表牆角、伸出量、物料、開孔或加工工序已核准。參考線不是開孔輪廓。')
-  for (const area of snapshot.project.areas) {
-    paragraph(area.name + ' · ' + area.shapes.length + ' shapes')
-    if (area.notes) paragraph('區域備註：' + area.notes)
+  const box = framing.length ? bounds(framing) : { x: 0, y: 0, width: 1200, height: 740 }
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const left = 12, right = 12, top = 27, bottom = 18
+  const drawableW = pageWidth - left - right
+  const drawableH = pageHeight - top - bottom
+  const scale = Math.min(drawableW / Math.max(box.width, 1), drawableH / Math.max(box.height, 1))
+  const shiftX = left + (drawableW - box.width * scale) / 2
+  const shiftY = top + (drawableH - box.height * scale) / 2
+  const px = (p: Point): Point => ({
+    x: shiftX + (p.x - box.x) * scale,
+    y: shiftY + (p.y - box.y) * scale,
+  })
+  const line = (a: Point, b: Point) => {
+    const a1 = px(a), b1 = px(b)
+    if (inBounds(a1) && inBounds(b1)) pdf.line(a1.x, a1.y, b1.x, b1.y)
   }
-  const excluded = snapshot.entries.filter(e => !e.geometry.top)
-  if (excluded.length) paragraph('DXF 將排除未完成輪廓：' + excluded.map(e => e.area.name + ' / ' + e.shape.name).join('；'), [160, 45, 35])
-  for (const entry of snapshot.entries) {
-    const { shape, area, geometry, rows } = entry
-    sectionTitle = area.name + ' / ' + shape.name
-    next(sectionTitle)
-    const outline = geometry.top ?? (shape.basis === 'cabinet' ? geometry.base : null)
-    if (outline) {
-      const bb = bounds(outline.map(p => transformPoint(p, shape)))
-      const scale = Math.min(152 / Math.max(bb.width, 1), 72 / Math.max(bb.height, 1))
-      const ox = 105 - bb.width * scale / 2, oy = y + 12
-      const view = (p: Point): Point => {
-        const t = transformPoint(p, shape)
-        return { x: ox + (t.x - bb.x) * scale, y: oy + (t.y - bb.y) * scale }
-      }
-      const polygon = (points: Point[], dashed: boolean) => {
-        pdf.setLineDashPattern(dashed ? [2, 1.5] : [], 0)
-        pdf.setDrawColor(dashed ? 140 : 15, dashed ? 140 : 76, dashed ? 140 : 67)
-        pdf.setLineWidth(dashed ? 0.25 : 0.55)
-        points.forEach((p, i) => { const a = view(p), b = view(points[(i + 1) % points.length]); pdf.line(a.x, a.y, b.x, b.y) })
-      }
-      if (shape.basis === 'cabinet' && geometry.base) polygon(geometry.base, true)
-      if (geometry.top) polygon(geometry.top, false)
-      edgeOrder(shape).forEach((edge, i) => {
-        const a = view(outline[i]), b = view(outline[(i + 1) % outline.length])
-        pdf.setTextColor(30); pdf.setFontSize(9)
-        const p=outline[i],q=outline[(i+1)%outline.length]
-        pdf.text(formatLength(Math.hypot(q.x-p.x,q.y-p.y),snapshot.project.unit), (a.x + b.x) / 2 + 2, (a.y + b.y) / 2 - 2)
+  const setStroke = (color: Rgb, width: number, dash: number[] = []) => {
+    pdf.setDrawColor(...color)
+    pdf.setLineWidth(width)
+    pdf.setLineDashPattern(dash, 0)
+  }
+  const words = (s: string, x: number, y: number, size = 9, align: 'left' | 'center' | 'right' = 'left', color: Rgb = textColor) => {
+    pdf.setTextColor(...color)
+    pdf.setFont('NotoTC', 'normal')
+    pdf.setFontSize(size)
+    pdf.text(s, x, y, { align })
+  }
+  const tag = (label: string, world: Point, size = 9, color: Rgb = textColor) => {
+    const p = px(world)
+    pdf.setFontSize(size)
+    const width = Math.min(58, pdf.getTextWidth(label) + 2.8)
+    pdf.setFillColor(...white)
+    pdf.roundedRect(p.x - width / 2, p.y - 3.6, width, 5.6, 1, 1, 'F')
+    words(label, p.x, p.y, size, 'center', color)
+  }
+
+  // Small header and footer only: no multi-page text report, no per-edge data table.
+  words(project.name.length > 65 ? project.name.slice(0, 64) + '…' : project.name, left, 12, 14)
+  words(project.unit === 'in' ? 'inch' : 'mm', pageWidth - right, 12, 9, 'right')
+  setStroke([202, 212, 207], 0.24)
+  pdf.line(left, 17, pageWidth - right, 17)
+
+  // Pass 1: Part fills and outlines. Open geometry remains visibly incomplete.
+  for (const part of parts) {
+    const outline = part.points.map(p => px({ x: part.x + p.x, y: part.y + p.y }))
+    if (outline.length < 3) continue
+    pdf.setFillColor(244, 249, 246)
+    setStroke(part.guide ? [140, 147, 143] : green, part.guide ? 0.3 : 0.65, part.guide ? [2.4, 1.8] : [])
+    const start = outline[0]
+    const deltas = outline.slice(1).map((p, i) => [p.x - outline[i].x, p.y - outline[i].y])
+    pdf.lines(deltas, start.x, start.y, [1, 1], 'FD', true)
+    pdf.setLineDashPattern([], 0)
+    // Edge treatment is visual only; it is never manufacturing approval.
+    if (!part.guide) {
+      edgeOrder(part.shape).forEach((edge, i) => {
+        const t = treatmentOf(part.shape, edge)
+        if (!t) return
+        const color: Rgb = t === 'polish' ? [18, 155, 84] : t === 'no-polish' ? [205, 61, 55] : orange
+        setStroke(color, 0.94, t === 'polish' ? [] : [2.2, 1.2])
+        const a = part.points[i], b = part.points[(i + 1) % part.points.length]
+        line({ x: part.x + a.x, y: part.y + a.y }, { x: part.x + b.x, y: part.y + b.y })
       })
-      if (geometry.top) {
-        if (shape.rotation !== 0 || shape.mirrored) {
-          const length=8/scale, o=view({x:0,y:0}),a=view({x:length,y:0}),b=view({x:0,y:length})
-          pdf.setDrawColor(35,110,155);pdf.setTextColor(35,110,155);pdf.setFontSize(8);pdf.setLineDashPattern([],0)
-          pdf.line(o.x,o.y,a.x,a.y);pdf.line(o.x,o.y,b.x,b.y)
-          pdf.text('X+',a.x+1,a.y+3);pdf.text('Y+',b.x+1,b.y+3)
-        }
-        pdf.setDrawColor(35, 110, 155); pdf.setLineDashPattern([2, 1], 0); pdf.setLineWidth(0.3)
-        for (const ref of shape.references) {
-          const rg = referenceGeometry(ref, shape, geometry)
-          for (const line of rg.lines) { const a = view(line.a), b = view(line.b); pdf.line(a.x, a.y, b.x, b.y) }
-          if (rg.point) { const p = view(rg.point); pdf.circle(p.x, p.y, 1.2, 'S') }
-        }
-        pdf.setFontSize(10); pdf.setTextColor(30)
-        pdf.text(formatLength(bounds(geometry.top).width, snapshot.project.unit) + ' × ' + formatLength(bounds(geometry.top).height, snapshot.project.unit), 105, oy + bb.height * scale + 9, { align: 'center' })
+    }
+  }
+
+  // Pass 2: independent *schematic* wall drawings, above countertop fills.
+  // No scale or mm values are inferred from the freehand points.
+  setStroke(orange, 0.85, [2.4, 1.6])
+  for (const wall of walls) {
+    wall.points.slice(1).forEach((p, i) => line(wall.points[i], p))
+    // A distinct dashed orange line plus the footer avoids repeated labels on the drawing.
+  }
+  pdf.setLineDashPattern([], 0)
+
+  // Pass 3: finished measurements directly on the drawing, including incomplete '?'.
+  for (const part of parts) {
+    const { shape } = part
+    words((part.areaName ? part.areaName + ' / ' : '') + shape.name,
+      px({ x: part.x, y: part.y - 145 }).x, px({ x: part.x, y: part.y - 145 }).y, 9)
+    const signedArea = part.points.reduce((s, p, i) => {
+      const q = part.points[(i + 1) % part.points.length]
+      return s + p.x * q.y - q.x * p.y
+    }, 0)
+    const sign = signedArea >= 0 ? 1 : -1
+    edgeOrder(shape).forEach((edge, i) => {
+      // Rectangle opposite edges repeat the same finished reading; keep one per axis.
+      if (shape.template === 'rectangle' && (edge === 'front' || edge === 'left')) return
+      const a = part.points[i], b = part.points[(i + 1) % part.points.length]
+      if (!a || !b) return
+      const dx = b.x - a.x, dy = b.y - a.y, size = Math.hypot(dx, dy)
+      if (size < 1) return
+      const normal = { x: sign * dy / size, y: -sign * dx / size }
+      const mid = { x: part.x + (a.x + b.x) / 2, y: part.y + (a.y + b.y) / 2 }
+      const label = { x: mid.x + normal.x * 45, y: mid.y + normal.y * 45 }
+      const n = finishedEdgeReading(shape, edge)
+      const text = n === null ? '?' : formatLength(n, project.unit)
+      const edgeA = { x: part.x + a.x, y: part.y + a.y }
+      const edgeB = { x: part.x + b.x, y: part.y + b.y }
+      setStroke([128, 146, 136], 0.18)
+      line(edgeA, { x: edgeA.x + normal.x * 27, y: edgeA.y + normal.y * 27 })
+      line(edgeB, { x: edgeB.x + normal.x * 27, y: edgeB.y + normal.y * 27 })
+      const labelPoint = px(label)
+      tag(text, label, 9, n === null ? red : green)
+      if (size * scale < 22) {
+        setStroke([128, 146, 136], 0.18)
+        const m = px(mid)
+        pdf.line(m.x, m.y, labelPoint.x, labelPoint.y)
       }
-      pdf.setLineDashPattern([], 0)
-      y = oy + bb.height * scale + 19
-      paragraph(geometry.top ? '實線：成品 / 灰虛線：櫃體 / 藍線：定位參考（非開孔）' : '僅顯示櫃體基準；成品輪廓未完成。', [85, 95, 90])
-    } else paragraph('尺寸未完成或無效，沒有生成輪廓。', [160, 45, 35])
-    for (const error of geometry.errors) paragraph('未完成：' + error, [160, 45, 35])
-    for (const row of rows) paragraph(row.label + ': ' + row.text)
-    const templateWarnings=geometry.warnings.filter(w=>w.includes('90°'))
-    if (templateWarnings.length) paragraph('複核：' + templateWarnings.join('; '), [135, 72, 19])
-    if (area.notes) paragraph('區域備註：' + area.notes)
-    if (shape.notes) paragraph('形狀備註：' + shape.notes)
+    })
+    const geometry = calculate(shape)
+    let sinkCount = 0
+    for (const ref of shape.references) {
+      if (ref.kind !== 'sink') continue
+      sinkCount++
+      let at: Point | null = null
+      if (geometry.top) {
+        const rg = referenceGeometry(ref, shape, geometry)
+        if (rg.point) at = part.local(rg.point)
+      }
+      if (!at) {
+        const x = value(ref.x)
+        const width = geometry.top ? bounds(geometry.top).width : null
+        const t = x !== null && width && width > 0 ? Math.max(0.08, Math.min(0.92, x / width)) : 0.5
+        at = { x: part.width * (ref.fromX === 'right' ? 1 - t : t), y: part.height * 0.5 }
+      }
+      const spot = px({ x: part.x + at.x, y: part.y + at.y })
+      setStroke([66, 124, 141], 0.25, [1.5, 1])
+      pdf.circle(spot.x, spot.y, 1.65, 'S')
+      const x = value(ref.x)
+      const label = 'S' + sinkCount + ' ' + (x === null ? '?' : formatLength(x, project.unit))
+      pdf.setFontSize(8.5)
+      const ww = pdf.getTextWidth(label) + 5
+      pdf.setFillColor(...white)
+      pdf.roundedRect(spot.x - ww / 2, spot.y - 10, ww, 6, 1.3, 1.3, 'F')
+      words(label, spot.x, spot.y - 5.7, 8.5, 'center', [51, 101, 125])
+    }
+    pdf.setLineDashPattern([], 0)
   }
-  const pages = pdf.getNumberOfPages()
-  for (let i = 1; i <= pages; i++) {
-    pdf.setPage(i); pdf.setFont('NotoTC'); pdf.setFontSize(8); pdf.setTextColor(100)
-    pdf.text('Field record - review before fabrication / ' + i + ' / ' + pages, 14, 289)
+
+  // Pass 4: visible on-canvas notes, with their original project-level pins.
+  // Notes remain as written and do not change measurements or CNC geometry.
+  for (const note of notes) {
+    const at = px({ x: note.x, y: note.y })
+    const target = px({ x: note.targetX, y: note.targetY })
+    const lines = canvasNoteLines(note.text)
+    const fontSize = 8.2
+    pdf.setFontSize(fontSize)
+    const neededW = Math.max(30, ...lines.map(l => pdf.getTextWidth(l) + 7))
+    const cardW = Math.min(55, neededW)
+    const cardH = Math.max(12, 5 + lines.length * 4.2)
+    setStroke(orange, 0.35, [1.5, 1])
+    pdf.line(target.x, target.y, at.x + 2, at.y + cardH / 2)
+    pdf.setFillColor(255, 250, 241)
+    pdf.setDrawColor(203, 151, 103)
+    pdf.roundedRect(at.x, at.y, cardW, cardH, 1.3, 1.3, 'FD')
+    pdf.setFillColor(...white)
+    pdf.circle(target.x, target.y, 1.3, 'FD')
+    for (let i = 0; i < lines.length; i++) {
+      words(lines[i], at.x + 3, at.y + 4.9 + i * 4.2, fontSize)
+    }
   }
+  pdf.setLineDashPattern([], 0)
+
+  // This one-line caution protects against mistaking a sketch for a CNC drawing.
+  const footer = 'FIELD SKETCH · dashed orange = schematic wall · NOT CNC / NOT TO SCALE · verify measurements'
+  setStroke([202, 212, 207], 0.24)
+  pdf.line(left, pageHeight - 12, pageWidth - right, pageHeight - 12)
+  words(footer, left, pageHeight - 6.5, 7.1, 'left', [92, 105, 98])
+  words('1 / 1', pageWidth - right, pageHeight - 6.5, 7.1, 'right', [92, 105, 98])
   return new Uint8Array(pdf.output('arraybuffer'))
 }

@@ -1,0 +1,32 @@
+import {test,expect} from '@playwright/test'
+import fs from 'node:fs/promises'
+
+test('Canvas-first assigns Part names from the active room instead of shape templates',async({page})=>{
+  await page.goto('/tools/site-measure?direct=1')
+  await page.getByRole('button',{name:'New project',exact:true}).click()
+  await page.getByRole('button',{name:'＋ Rectangle',exact:true}).click()
+  await expect(page.locator('[data-shape] .sm-part-title')).toHaveText('Kitchen 1')
+  await page.getByRole('button',{name:'＋ L-shape',exact:true}).click()
+  await expect(page.locator('[data-shape] .sm-part-title')).toHaveText(['Kitchen 1','Kitchen 2'])
+  await page.getByRole('button',{name:'＋ Area',exact:true}).click()
+  await page.locator('.sm-area-settings summary').click()
+  await page.getByRole('textbox',{name:'Area name'}).fill('Bathroom')
+  await page.getByRole('textbox',{name:'Area name'}).blur()
+  await page.getByRole('button',{name:'＋ Rectangle',exact:true}).click()
+  await expect(page.locator('[data-shape] .sm-part-title')).toHaveText('Bathroom 1')
+  await page.getByRole('button',{name:'＋ L-shape',exact:true}).click()
+  await expect(page.locator('[data-shape] .sm-part-title')).toHaveText(['Bathroom 1','Bathroom 2'])
+  await page.locator('.sm-part-toolbar .sm-part-rename').click()
+  const input=page.getByRole('textbox',{name:'Part name'})
+  await input.fill('Master Vanity')
+  await input.press('Enter')
+  await page.getByRole('button',{name:'＋ Rectangle',exact:true}).click()
+  await expect(page.locator('[data-shape] .sm-part-title')).toHaveText(['Bathroom 1','Master Vanity','Bathroom 2'])
+  const download=page.waitForEvent('download')
+  await page.getByRole('button',{name:'Backup',exact:true}).click()
+  const file=await download
+  const p=JSON.parse(await fs.readFile((await file.path())!,'utf8'))
+  expect(p.areas.map((a:{name:string})=>a.name)).toEqual(['Kitchen','Bathroom'])
+  expect(p.areas[0].shapes.map((s:{name:string})=>s.name)).toEqual(['Kitchen 1','Kitchen 2'])
+  expect(p.areas[1].shapes.map((s:{name:string})=>s.name)).toEqual(['Bathroom 1','Master Vanity','Bathroom 2'])
+})

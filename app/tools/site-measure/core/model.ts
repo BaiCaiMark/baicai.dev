@@ -27,6 +27,22 @@ export const fieldRecordSchema = z.discriminatedUnion('kind', [
   z.object({ id, edge: edgeSchema.nullable(), kind: z.literal('note'), text }).strict(),
 ])
 export type FieldRecord = z.infer<typeof fieldRecordSchema>
+// Canvas Notes are field-only annotations in world drawing coordinates, never CNC geometry.
+export const canvasNoteSchema = z.object({
+  id, text: z.string().trim().min(1).max(800),
+  x: z.number().finite().min(-10000).max(10000),
+  y: z.number().finite().min(-10000).max(10000),
+  targetX: z.number().finite().min(-10000).max(10000),
+  targetY: z.number().finite().min(-10000).max(10000),
+}).strict()
+export type CanvasNote = z.infer<typeof canvasNoteSchema>
+const canvasPointSchema=z.object({x:z.number().finite().min(-10000).max(10000),y:z.number().finite().min(-10000).max(10000)}).strict()
+export const wallSketchSchema=z.object({
+  id, name:z.string().min(1).max(120),
+  kind:z.literal('schematic'),
+  points:z.array(canvasPointSchema).min(2).max(120),
+}).strict()
+export type WallSketch=z.infer<typeof wallSketchSchema>
 const dimensionsSchema = z.object({ width: quantitySchema, height: quantitySchema, legX: quantitySchema, legY: quantitySchema }).strict()
 export const shapeSchema = z.object({
   id, name: z.string().min(1).max(120), template: z.enum(['rectangle', 'l']),
@@ -45,17 +61,21 @@ export const shapeSchema = z.object({
   fieldRecords: z.array(fieldRecordSchema).max(80).default([]),
   // Optional for schema-v2 backups created before quick edge treatment was introduced.
   treatments: z.partialRecord(edgeSchema, treatmentSchema).optional(),
+  // OPEN is a physical/visibility decision, separate from Polish and Overhang.
+  openEdges: z.partialRecord(edgeSchema, z.boolean()).optional(),
   layout: z.object({x:z.number().finite().min(-10000).max(10000),y:z.number().finite().min(-10000).max(10000)}).strict().optional(),
 }).strict()
 const currentProjectSchema = z.object({
-  schemaVersion: z.literal(2), id, name: z.string().min(1).max(120),
+  schemaVersion: z.literal(2), canvasLayout: z.literal('shared-v1').optional(), id, name: z.string().min(1).max(120),
   revision: z.number().int().min(0), updatedAt: z.string().datetime(), unit: z.enum(['in', 'mm']),
   defaults: z.object({ revision: z.number().int().min(0), end: quantitySchema, front: quantitySchema }).strict(),
+  canvasNotes: z.array(canvasNoteSchema).max(100).optional(),
+  wallSketches: z.array(wallSketchSchema).max(50).optional(),
   areas: z.array(z.object({
     id, name: z.string().min(1).max(120), notes: text, shapes: z.array(shapeSchema).max(60),
   }).strict()).min(1).max(30),
 }).strict().superRefine((p, ctx) => {
-  const ids = [p.id, ...p.areas.flatMap(a => [a.id, ...a.shapes.flatMap(s => [s.id, ...s.references.map(r => r.id), ...s.fieldRecords.map(r=>r.id)])])]
+  const ids = [p.id, ...(p.canvasNotes??[]).map(note=>note.id), ...(p.wallSketches??[]).map(wall=>wall.id), ...p.areas.flatMap(a => [a.id, ...a.shapes.flatMap(s => [s.id, ...s.references.map(r => r.id), ...s.fieldRecords.map(r=>r.id)])])]
   if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', message: 'Duplicate identifiers / 重複識別碼' })
   if (p.areas.reduce((sum, a) => sum + a.shapes.length, 0) > 200) ctx.addIssue({ code: 'custom', message: 'Maximum 200 shapes / 最多 200 個形狀' })
 })
@@ -115,8 +135,26 @@ export function newProject(): Project {
   return {
     schemaVersion: 2, id: uid(), name: 'New measurement project', revision: 0, updatedAt: new Date().toISOString(), unit: 'in',
     defaults: { revision: 0, end: quantity('1', 'in', 'allowance'), front: quantity('1.5', 'in', 'allowance') },
+    canvasNotes: [], wallSketches: [],
     areas: [{ id: uid(), name: 'Kitchen', notes: '', shapes: [] }],
   }
+}
+/** Human-readable field part names are numbered within their room (Area), not by geometry type.
+ * Existing custom names remain untouched; the next index follows the highest matching suffix.
+ */
+export function nextPartNameForArea(area: Area): string {
+  const prefix = area.name.trim() || 'Area'
+  const stem = prefix.toLocaleLowerCase() + ' '
+  let highest = 0
+  for (const part of area.shapes) {
+    const text = part.name.trim().toLocaleLowerCase()
+    if (!text.startsWith(stem)) continue
+    const suffix = text.slice(stem.length)
+    if (!/^[1-9][0-9]*$/.test(suffix)) continue
+    const number = Number(suffix)
+    if (Number.isSafeInteger(number)) highest = Math.max(highest, number)
+  }
+  return prefix + ' ' + (highest + 1)
 }
 export function newReference(kind: Reference['kind'], unit: Unit): Reference {
   return { id: uid(), kind, basis: 'countertop', fromX: 'left', fromY: 'back', x: quantity('', unit), y: quantity('', unit) }
@@ -135,12 +173,20 @@ export function duplicateShape(source: Shape, existingNames: string[], position:
 export function treatmentOf(shape: Shape, edge: Edge): Treatment | null {
   return shape.treatments?.[edge] ?? null
 }
+// On-canvas manufacturing annotation must NEVER mutate surveyed dimensions or overhangs.
+// Unlike the legacy quick-setup helper below, this only records the selected finish.
+export function markTreatment(shape: Shape, edge: Edge, treatment: Treatment): void {
+  shape.treatments ??= {}
+  shape.treatments[edge] = treatment
+}
 // Only replace blank or default-sourced values. Manual custom allowances remain untouched.
 export function setTreatment(shape: Shape, edge: Edge, treatment: Treatment, project: Project): void {
   shape.treatments ??= {}
   const previous = shape.treatments[edge]
   shape.treatments[edge] = treatment
   if (previous === treatment) return
+  // Once an explicit OPEN decision exists, treatment and allowance stay independent.
+  if (shape.openEdges?.[edge] !== undefined) return
   const existing = shape.allowances[edge]
   if (existing.input.trim() && existing.origin !== 'default') return
   if (treatment === 'miter') {
@@ -165,6 +211,27 @@ export function applyRectangleQuickDefaults(shape: Shape, project: Project): voi
     const preset = edge === 'front' ? project.defaults.front : quantity('0', project.unit, 'default')
     shape.allowances[edge] = {...preset,origin:'default',status:'unconfirmed',defaultRevision:project.defaults.revision}
   }
+}
+// Canvas-first defaults are suggestions only; never silently replace a measured or custom value.
+export function setEdgeOpen(shape: Shape, edge: Edge, open: boolean, project: Project): void {
+  const previousOpen = shape.openEdges?.[edge]
+  const existing = shape.allowances[edge]
+  const autoValue = !existing.input.trim() || existing.origin === 'default'
+  const previousTreatment = shape.treatments?.[edge]
+  shape.openEdges ??= {}
+  shape.openEdges[edge] = open
+  if (autoValue) {
+    const preset = open ? (edge === 'front' || edge === 'innerX' ? project.defaults.front : project.defaults.end) : quantity('0', project.unit, 'default')
+    shape.allowances[edge] = { ...preset, origin: 'default', status: 'unconfirmed', defaultRevision: project.defaults.revision }
+  }
+  shape.treatments ??= {}
+  // Preserve Miter and independently chosen treatments. Auto-follow only while the allowance is still a preset.
+  if (!previousTreatment || (autoValue && previousOpen !== undefined && previousTreatment === (previousOpen ? 'polish' : 'no-polish')))
+    shape.treatments[edge] = open ? 'polish' : 'no-polish'
+}
+export function applyCanvasOpenDefaults(shape: Shape, project: Project): void {
+  if (shape.openEdges) return
+  for (const edge of edgeOrder(shape)) setEdgeOpen(shape, edge, edge === 'front' || (shape.template === 'l' && edge === 'innerX'), project)
 }
 export function applyDefault(shape: Shape, edge: Edge, project: Project, kind: 'end' | 'front'): Shape {
   return { ...shape, allowances: { ...shape.allowances, [edge]: { ...project.defaults[kind], origin: 'default', defaultRevision: project.defaults.revision } } }

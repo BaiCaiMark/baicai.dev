@@ -39,6 +39,26 @@ test('PDF has embedded Unicode font, vector pages and shared numeric composition
   fs.writeFileSync('artifacts/site-measure/sample-rows.json',JSON.stringify(exportSnapshot(p).entries.map(e=>e.rows)))
   assert.ok(pdf.length>10000)
 })
+test('minimal PDF is one shared-canvas field drawing with notes and wall sketches',()=>{
+  const p=sampleProject()
+  p.canvasNotes=[{id:'field-note-1',text:'Wall not straight',x:250,y:90,targetX:195,targetY:195}]
+  p.wallSketches=[{id:'field-wall-1',name:'Wall sketch 1',kind:'schematic',points:[
+    {x:105,y:145},{x:150,y:160},{x:210,y:150},{x:290,y:175},
+  ]}]
+  const font=new Uint8Array(fs.readFileSync('public/fonts/site-measure/NotoSansTC-Regular.ttf'))
+  const shot=exportSnapshot(p)
+  const pdf=createPdf(shot,font)
+  assert.equal(new TextDecoder().decode(pdf.subarray(0,5)),'%PDF-')
+  // A single drawing sheet, rather than the previous report with one page per Part.
+  const structure=Buffer.from(pdf).toString('latin1')
+  assert.equal((structure.match(/\/Type \/Page\b/g)??[]).length,1)
+  assert.ok(pdf.length>10000)
+  fs.mkdirSync('artifacts/site-measure',{recursive:true})
+  fs.writeFileSync('artifacts/site-measure/minimal-field-drawing.pdf',pdf)
+  // Freehand sketches and Canvas Notes are intentionally excluded from CNC DXF geometry.
+  assert.equal(createDxf(shot).text,createDxf(exportSnapshot({...p,canvasNotes:[],wallSketches:[]})).text)
+})
+
 test('unsupported PDF glyphs fail visibly instead of losing notes',()=>{
   const p=sampleProject();p.name='Unsupported 🪨'
   assert.throws(()=>createPdf(exportSnapshot(p),new Uint8Array(fs.readFileSync('public/fonts/site-measure/NotoSansTC-Regular.ttf'))),/不支援/)

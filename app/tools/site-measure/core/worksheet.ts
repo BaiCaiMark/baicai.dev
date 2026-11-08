@@ -1,6 +1,6 @@
 import { bounds, calculate, transformPoint, type Point } from './geometry'
 import { edgeOrder, value, type Edge, type Param, type Shape } from './model'
-import { formatLength, type Unit } from './units'
+import { formatLength, numeric, type Unit } from './units'
 
 export const edgeNames: Record<Edge, string> = {
   back: 'Back run', right: 'Right end', front: 'Front edge', left: 'Left back run',
@@ -17,6 +17,73 @@ export function edgeControl(shape: Shape, edge: Edge): { parameter: Param | null
     innerY: { parameter: null, label: 'Inside vertical run', relationship: 'Left back run − right end depth, adjusted by edge overhangs.' },
   }
   return controls[edge]
+}
+export type DimensionTerms = { parameter: Param | null; start: Edge; end: Edge; endSign: 1 | -1 }
+/** A dimension label edits the run and both allowances that determine that run.
+ * Edge treatment is a distinct physical edge action, never a dimension input.
+ */
+export function dimensionTerms(shape: Shape, edge: Edge): DimensionTerms | null {
+  if(shape.template==='rectangle'){
+    if(edge==='back'||edge==='front')return{parameter:'width',start:'left',end:'right',endSign:1}
+    return{parameter:'height',start:'back',end:'front',endSign:1}
+  }
+  const terms:Partial<Record<Edge,DimensionTerms>>={
+    back:{parameter:'width',start:'left',end:'right',endSign:1},
+    right:{parameter:'legX',start:'back',end:'innerX',endSign:1},
+    left:{parameter:'height',start:'back',end:'front',endSign:1},
+    front:{parameter:'legY',start:'left',end:'innerY',endSign:-1},
+  }
+  return terms[edge]??null
+}
+/** Show a valid, individually resolved Finished run even if the other axis is still unmeasured.
+ * A partial reading NEVER makes geometry ready for fabrication or DXF export.
+ */
+export function finishedEdgeReading(shape: Shape, edge: Edge): number | null {
+  const geometry=calculate(shape)
+  if(geometry.top){
+    const index=edgeOrder(shape).indexOf(edge)
+    const a=geometry.top[index],b=geometry.top[(index+1)%geometry.top.length]
+    return Math.hypot(b.x-a.x,b.y-a.y)
+  }
+  const terms=dimensionTerms(shape,edge)
+  if(shape.basis==='finished'){
+    if(terms?.parameter){const n=value(shape.dimensions[terms.parameter]);return n!==null&&n>0?n:null}
+    if(shape.template==='l'){
+      const w=value(shape.dimensions.width),h=value(shape.dimensions.height),a=value(shape.dimensions.legX),b=value(shape.dimensions.legY)
+      const n=edge==='innerX'&&w!==null&&b!==null?w-b:edge==='innerY'&&h!==null&&a!==null?h-a:null
+      return n!==null&&n>0?n:null
+    }
+    return null
+  }
+  const amount=(e:Edge)=>value(shape.allowances[e])
+  let result:number|null=null
+  if(terms?.parameter){
+    const base=value(shape.dimensions[terms.parameter]),start=amount(terms.start),end=amount(terms.end)
+    if(base!==null&&base>0&&start!==null&&end!==null)result=base+start+terms.endSign*end
+  }else if(shape.template==='l'){
+    const w=value(shape.dimensions.width),h=value(shape.dimensions.height),a=value(shape.dimensions.legX),b=value(shape.dimensions.legY)
+    if(edge==='innerX'&&w!==null&&b!==null&&amount('right')!==null&&amount('innerY')!==null)
+      result=w-b+amount('right')!+amount('innerY')!
+    if(edge==='innerY'&&h!==null&&a!==null&&amount('front')!==null&&amount('innerX')!==null)
+      result=h-a+amount('front')!-amount('innerX')!
+  }
+  return result!==null&&Number.isFinite(result)&&result>0?result:null
+}
+/** Small arithmetic annotation for the primary length/depth labels only.
+ * This is a reading of real cabinet + overhang values, not a second geometry model.
+ */
+export function finishedFormula(shape: Shape, edge: Edge, unit: Unit): string | null {
+  if (shape.template!=='rectangle' || shape.basis!=='cabinet' || (edge!=='back'&&edge!=='right')) return null
+  const terms=dimensionTerms(shape,edge)
+  if(!terms?.parameter || finishedEdgeReading(shape,edge)===null) return null
+  const parts=[shape.dimensions[terms.parameter],shape.allowances[terms.start],shape.allowances[terms.end]]
+  const numbers=parts.map(q=>value(q))
+  if(numbers.some(n=>n===null)) return null
+  const show=(i:number)=>parts[i].unit===unit?parts[i].input.trim().replace(/[″”"]$/,'').trim():numeric(numbers[i]!,unit)
+  const ingredients=[show(0)]
+  if(numbers[1]!>0)ingredients.push(show(1))
+  if(numbers[2]!>0)ingredients.push(show(2))
+  return ingredients.length>1?ingredients.join(' + '):null
 }
 export function edgeLength(shape: Shape, edge: Edge, finished = true): number | null {
   const g = calculate(shape), outline = finished ? g.top : g.base

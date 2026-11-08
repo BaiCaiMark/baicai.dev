@@ -250,3 +250,50 @@
 - 選中 Part 內部直接拖動；Snap On/Off 與 Ortho On/Off （Snap 視覺引導線、智慧 Anchor 等仍待後續調整）。
 - 保持既有 JSON schema v2 可以讀取舊工程；原有 PDF／DXF output 及 IndexedDB 保護；新 PDF 記錄 Treatment，但不憑 Treatment 假造加工幾何。
 - 必須通過 core、瀏覽器與 build，先發 Preview，再合併 main。原 Preview origin 資料不會自動出現在 production origin，需備份／匯入。
+
+## 19. Canvas-first 互動原型（2026-11-05，先在 Preview 使用 `?direct=1`）
+- 工地驗收的首要阻礙不是缺少功能，而是開啟 Vanity 後必須理解「總長/最深/淺位/深位寬」等 List 欄位。單純翻譯不會解決問題。
+- 本輪做成**可比較的原型**：開啟 `/tools/site-measure?direct=1`，新建 Rectangle 或 Vanity Step 後**不彈出列表**；逐條點選畫布上的邊，在圖上出現極短的尺寸輸入框、Overhang 快捷鈕與 No Polish / Polish / Miter。每條邊的實測值仍進同一套嚴格幾何計算。
+- 階梯 Vanity 的四條控制邊直接在圖面標上「總長」「最深處」「淺位深度」「深位長度」，其餘兩條為根據四數得出的計算邊，不假冒獨立實測。
+- 邊上可以加短 Note（例：左牆斜 1/4″）；記錄仍與該邊綁定，文字以黃色 Note 標記顯示在畫布上，PDF / backup 維持原有 fieldRecords 路徑。
+- 選擇 Part 後按 `＋ Sink`，畫布出現 Sink 定位標記及 X/Y 快速輸入；尚未量到的定位會以問號表示，不假造 Sink Cutout。
+- 原表單留在 `欄位設定` / `更多設定`，平常不必開；一般連結先保持 Classic，待使用者 Android 真機驗收，再決定是否讓 Canvas-first 成為預設。
+- 未包含任意牆線手繪、任意位置 Notes、精確局部截面、Waterfall 幾何補償。牆偏斜仍只是 Note；不宣稱可直接 CNC。
+
+## 20. 工地反饋修正：Finished、OPEN + 1½″ 與 Move handle（2026-11-06）
+- 以 Canvas-first 模式為首要驗收對象。畫布數字的語義**一律為 Finished Countertop 尺寸**；Cabinet 量測值只在直接編輯器中輸入/核對。尚未算出完整 Finished 時，圖上標成「? / FINISHED ?」，禁止退回顯示 Cabinet 尺寸冒充成品。
+- 新建 Canvas-first Rectangle：Front OPEN 預設 Front Overhang 1.5″；非 OPEN 邊 0。新建 Canvas-first L/Vanity Step：兩條朝前的水平邊 `front`、`innerX` 預設 OPEN 及 1.5″；其餘非 OPEN 預設 0。預設來源是 `default / unconfirmed`，絕非現場已確認尺寸。
+- 畫布點任一條邊直接選 OPEN / Not OPEN（與 Polish、Miter 分開記錄），OPEN 自動套用對應專案 Overhang 預設（前邊 1.5″、側邊 1″）；Not OPEN 預設 0；保護手動輸入的 Custom 值，不能因切換 OPEN 而覆蓋。每條邊均提供顯眼的 1.5″ 快選，不再要求使用者重複鍵盤輸入。
+- 已存在的舊 L 工程若沒有 OPEN 資料，提供一次性的「套用 OPEN 預設」入口，手動 Custom allowance 不改。
+- Canvas-first 移除圖形右上角的十字 Move handle；Part 內部直接拖曳即移動，邊線點擊繼續優先進入尺寸編輯；Classic 暫維持原功能以保留回歸比較。
+- 保持局限：這是現場量尺示意工具；未完整量得的輪廓不能稱為可 CNC 的精確 finished 檯面。
+
+## 21. 方向尺寸與實體邊屬性分流（2026-11-06，Canvas-first Preview）
+- 工地用戶指出：點「上方 60」卻要另外點右側才可設定 1″，點「右邊 21」卻要另外點下方才可設定 1.5″，嚴重違反手繪筆記直覺。
+- 本輪實作將 **Dimension label** 與 **Physical edge line** 視為兩個不同的操作目標：
+  - 點尺寸數字（在標註線外側的白色小框）→ 小型方向輸入區，列出該方向兩端 Overhang + Cabinet 實測，立即顯示 Finished；右側 End 1″ 及前方 1.5″ 可在同一個畫面一鍵選擇。
+  - 點檯面實際邊界 → 獨立的 OPEN / Not OPEN、No Polish / Polish / Miter、Note，**不再顯示 Cabinet 尺寸 / Overhang 的長表單**；OPEN 仍可帶入預設，手動覆寫保護既有規則。
+- 示範：Rectangle 右側 OPEN 給 1″，上方尺寸選框直接編輯 Left 0 + Cabinet 60 + Right 1 = Finished 61；右側尺寸選框直接編輯 Back 0 + Cabinet 21 + Front 1.5 = Finished 22.5。
+- 不需等待所有尺寸完整，已量得單一方向和其兩端 allowance 的 Finished 數字即可在圖上顯示；**整個輪廓未完成時仍標示 Finished · incomplete，DXF 不得誤當可加工圖**。
+- 圖紙移除自動加上的中文「總長/最深處/深淺差」標籤；只留下尺寸數字與使用者自己的 Note。直接模式移除冗餘 Move 工具列按鈕，仍可以拖動選中的 Part。
+- L-shape 保持四個獨立控制尺寸；內凹邊的計算尺寸只讀，方向算式由 `dimensionTerms` 綁定幾何而非依外觀猜測。
+- Classic / main 的操作暫不替換。用戶驗收後再評估是否成為預設。
+
+## 22. Bathroom Vanity 的 Sink Center 改為 X-only、雙盆直接編輯（2026-11-06）
+- 現場實際流程：量 Sink Center 只需「距左邊或右邊多少」，通常**不量前後 Y**。原先硬顯示 X/Y 是反直覺表單。直接輸入模式預設僅顯示 Left / Right 和一個距離，Y 不再需要填寫，且空白 Y 不被視為遺漏必填；仍由 Advanced 保留特殊需求。
+- 主臥常是 Double Sink：面板內直接顯示 Sink 1、Sink 2 切換與 `＋ Sink`，新增第二盆不跳到 Advanced；上方 `＋ Sink` 也會新建獨立 reference，而不永遠重開第一盆；可在同一面板移除多餘 Sink（需再次確認）。
+- 畫布以 S1、S2 標示兩個中心的 X 讀數；有 X 無 Y 時，標記只放在示意位置（虛線），**不能冒充已量到 2D 真實坐標**。X 確認後可依左／右基準沿畫布 X 軸定位；資料不足時不產生虛假精確幾何。
+- JSON backup / Undo / PDF 保留每個 Sink 的獨立 X 原始輸入與 fromX；PDF 用 Sink 1、Sink 2 區分，未填 Y 不再報「Y unknown」。DXF 不因這些示意定位生成 Sink Cutout。Cooktop 保留原本完整 X/Y 操作與校驗。
+
+## 23. Part 名稱直接修改 + 在畫布保留 Cabinet 算式（2026-11-06）
+- 工地驗收：自動命名 `Rectangle 1` 不等於真正的 Bathroom/Ensuite/Vanity 名稱；使用者找不到改名位置。Canvas-first 預設把工具列的名稱變成帶 ✎ 的可點擊編輯入口，畫布上點 Part 標題也能直接改名；保留 Schema 的 120 字元限制、Undo/自動儲存/備份與所有輸出同步，不必再開進階 Part settings。Esc 取消，Enter / Done 儲存。
+- 畫布不能只顯示 Finished 總數而失去量尺過程。Rectangle 的上方主尺寸標籤顯示 Cabinet 與左右 Overhang 的簡潔加法（例如 `60 + 1`），結果仍大字顯示 `61″`；右側主深度標籤顯示 `21 + 1.5` 和 `22.5″`。兩側 0 已確認時自動省略，不可省略未知值；其餘重複邊僅顯示 Finished，避免畫面過度擁擠。所有算式從原始資料動態運算，不寫死數字。
+- 若值未知、輸入不合法、直接以 Finished 實測、或 L-shape 幾何具有不同加減語義，**不應顯示錯誤的簡單 Cabinet 加法**。PDF 原有的測量與算法記錄保留；不改 CNC 幾何。
+
+## 24. Room / Area 主導的 Part 自動命名（2026-11-07）
+- 現場使用者指出：既然已有 Room / Area，沒有必要新增每一片時看到 `Rectangle 1`、`L-shape 1` 再手動改名。
+- Canvas-first Preview 的新建 Part 依目前 Area 名稱自動命名。同一個 Kitchen 區域內，不論 Rectangle / L / Vanity Step，順序是 Kitchen 1、Kitchen 2；在新建且已命名為 Bathroom 的 Area 內，從 Bathroom 1、Bathroom 2 獨立開始。
+- 新增 Part 時按該區域**現有同前綴數字的最大值 +1**，不按幾何形狀分組；Room 改名後只影響後續新 Part，不重新命名已有工程或使用者自訂名稱。手動 ✎ Rename 仍保留。
+- `＋ Area` 目前仍會先建立 `Area N`，可從 Room 標題下拉改名為 Bathroom、Ensuite、Kitchen 等；未改名時新 Part 會依 `Area N` 命名。這輪不重設使用者已儲存的 Room/Part。
+- 小修正：修改 Area name 後若下拉設定仍開著，按新增 Part 會自動收合 Area 設定，避免覆蓋新 Part 的工具列。
+- 為保留比較和既有經典回歸，此規則先只在 `?direct=1` Canvas-first Preview 運作；Classic 暫沿用原形狀名稱。

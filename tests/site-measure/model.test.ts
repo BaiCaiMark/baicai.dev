@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseLength, numeric } from '../../app/tools/site-measure/core/units'
-import { applyDefault, edgeOrder, importCopy, newShape, parseBackup, quantity, sampleProject, setBasis, value } from '../../app/tools/site-measure/core/model'
+import { applyDefault, edgeOrder, importCopy, markTreatment, newShape, parseBackup, quantity, sampleProject, setBasis, value } from '../../app/tools/site-measure/core/model'
 import { area, bounds, calculate, exportSnapshot, offsetOrthogonal, referenceGeometry, transformPoint, validPolygon } from '../../app/tools/site-measure/core/geometry'
 import { historyReducer, initialHistory } from '../../app/tools/site-measure/core/history'
 
@@ -94,7 +94,7 @@ for (const rotation of [0, 90, 180, 270] as const) for (const mirrored of [false
 test('sink X only creates reference line, no center point or Y', () => {
   const s = sampleProject().areas[1].shapes[0], g = calculate(s), r = referenceGeometry(s.references[0], s, g)
   assert.equal(r.point, null); assert.equal(r.lines[0].a.x, 762); assert.equal(r.lines[0].b.x, 762)
-  assert.match(r.warnings.join(), /Y unknown/)
+  assert.doesNotMatch(r.warnings.join(), /Y unknown/) // sink Y is optional in the field worksheet
 })
 test('reference supports right/front direction and cabinet basis', () => {
   const s = sampleProject().areas[1].shapes[0], r = s.references[0]
@@ -146,4 +146,18 @@ test('unit marks cannot silently change millimeter input or concatenate digits',
   assert.equal(parseLength('60"','mm'),null)
   assert.equal(parseLength('1"2','in'),null)
   assert.equal(parseLength('60"','in'),1524)
+})
+
+test('field edge-treatment marks never modify measured geometry or overhang',()=>{
+  const p=sampleProject(),s=p.areas[1].shapes[0]
+  const measured=structuredClone(s.dimensions),overhang=structuredClone(s.allowances)
+  const reference=structuredClone(s.openEdges),geometry=calculate(s).top
+  for(const treatment of ['polish','miter','no-polish'] as const){
+    markTreatment(s,'right',treatment)
+    assert.equal(s.treatments?.right,treatment)
+    assert.deepEqual(s.dimensions,measured)
+    assert.deepEqual(s.allowances,overhang)
+    assert.deepEqual(s.openEdges,reference)
+    assert.deepEqual(calculate(s).top,geometry)
+  }
 })

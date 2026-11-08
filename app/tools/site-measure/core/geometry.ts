@@ -147,8 +147,8 @@ export function referenceGeometry(ref: Reference, shape: Shape, geometry: Geomet
   const x = xValue === null ? null : ref.fromX === 'left' ? bb.x + xValue : bb.x + bb.width - xValue
   const y = yValue === null ? null : ref.fromY === 'back' ? bb.y + yValue : bb.y + bb.height - yValue
   if (x === null) warnings.push('X unknown or invalid')
-  if (y === null) warnings.push('Y unknown or invalid')
-  if (ref.x.status !== 'confirmed' || ref.y.status !== 'confirmed') warnings.push('Position measurements are not all field checked')
+  if (y === null && (ref.kind !== 'sink' || ref.y.input.trim())) warnings.push('Y unknown or invalid')
+  if (ref.x.status !== 'confirmed' || (ref.kind !== 'sink' || ref.y.input.trim()) && ref.y.status !== 'confirmed') warnings.push('Position measurements are not all field checked')
   let lines: Segment[] = []
   if (x !== null) lines = lines.concat(clipAxis(polygon, x, 'x'))
   if (y !== null) lines = lines.concat(clipAxis(polygon, y, 'y'))
@@ -197,9 +197,9 @@ export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(s
   }
   rows.push({ label: 'Template orientation & reference axes', text: 'Rotation ' + shape.rotation + '° / Mirror ' + (shape.mirrored ? 'Yes' : 'No') + '; original template X left→right, Y back→front; axes follow the drawing' })
   for (const ref of shape.references) {
-    const label = ref.kind === 'sink' ? 'Sink Center' : 'Cooktop'
-    rows.push({ label: label + ' · ' + (ref.basis === 'cabinet' ? 'Cabinet edges' : 'Countertop edges'), text: 'X ' + (ref.fromX === 'left' ? 'from left' : 'from right') + ' ' + formatLength(value(ref.x), unit) + ' / Y ' + (ref.fromY === 'back' ? 'from back' : 'from front') + ' ' + formatLength(value(ref.y), unit) + ' (reference only, not a cutout)' })
-    rows.push({ label: label + ' measurement source', text: 'X ' + originLabels[ref.x.origin] + ' / ' + statusLabels[ref.x.status] + ' · Y ' + originLabels[ref.y.origin] + ' / ' + statusLabels[ref.y.status] })
+    const label = ref.kind === 'sink' ? 'Sink '+(shape.references.filter(r=>r.kind==='sink').findIndex(r=>r.id===ref.id)+1)+' Center' : 'Cooktop'
+    rows.push({ label: label + ' · ' + (ref.basis === 'cabinet' ? 'Cabinet edges' : 'Countertop edges'), text: 'X ' + (ref.fromX === 'left' ? 'from left' : 'from right') + ' ' + formatLength(value(ref.x), unit) + (ref.kind === 'sink' && !ref.y.input.trim() ? ' (X only; not a cutout)' : ' / Y ' + (ref.fromY === 'back' ? 'from back' : 'from front') + ' ' + formatLength(value(ref.y), unit) + ' (reference only, not a cutout)') })
+    rows.push({ label: label + ' measurement source', text: 'X ' + originLabels[ref.x.origin] + ' / ' + statusLabels[ref.x.status] + (ref.kind==='sink'&&!ref.y.input.trim() ? '' : ' · Y '+ originLabels[ref.y.origin] + ' / ' + statusLabels[ref.y.status]) })
     for (const warning of referenceGeometry(ref, shape, geometry).warnings) rows.push({ label: label + ' Needs Check', text: warning })
   }
   for (const record of shape.fieldRecords ?? []) {
