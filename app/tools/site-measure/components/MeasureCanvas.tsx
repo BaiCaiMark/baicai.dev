@@ -8,9 +8,9 @@ import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
-type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; directMode?: boolean; unit: Unit; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
+type Props = { area: Area; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
 const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
-export default function MeasureCanvas({ area, selected, selectedEdge, selectedReference, floatingEditor, directMode, unit, moving, toolbar, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
+export default function MeasureCanvas({ area, selected, selectedEdge, selectedReference, floatingEditor, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
@@ -21,7 +21,7 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
   const manualView=useRef(false)
   const [drag,setDrag]=useState<{id:string;position:Point}|null>(null)
   const [editorAnchor,setEditorAnchor]=useState<Point|null>(null)
-  const [snapEnabled,setSnapEnabled]=useState(true),[orthoEnabled,setOrthoEnabled]=useState(false)
+  const lastBlankTap = useRef<{time:number;point:Point}|null>(null)
   const layout=useMemo(()=>worksheetLayout(area.shapes),[area.shapes])
   const fitted=useMemo(()=>{
     if(!layout.length)return{x:0,y:0,width:1100,height:650}
@@ -150,8 +150,9 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
         if(hit){partId=hit.partId;edge=hit.edge}
       }
       const item=layout.find(p=>p.shape.id===partId)
+      if(partId)lastBlankTap.current=null
       start.current={x:e.clientX,y:e.clientY,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
-    }else{moved.current=true;start.current=null;liveDrag.current=null;setDrag(null)}
+    }else{moved.current=true;start.current=null;lastBlankTap.current=null;liveDrag.current=null;setDrag(null)}
     reset()
   }
   const move=(e:PointerEvent<SVGSVGElement>)=>{
@@ -215,13 +216,21 @@ export default function MeasureCanvas({ area, selected, selectedEdge, selectedRe
         else if(start.current.edge)onEdge({partId:start.current.partId,edge:start.current.edge})
         else onSelect(start.current.partId)
       }
+      else if(!moved.current&&start.current&&!start.current.partId){
+        // Only a stationary double-tap on empty canvas recenters the entire drawing.
+        // Shape, edge, dimension and two-finger gestures never trigger Fit All.
+        const now=performance.now(),previous=lastBlankTap.current
+        const point={x:e.clientX,y:e.clientY}
+        if(previous&&now-previous.time<340&&Math.hypot(point.x-previous.point.x,point.y-previous.point.y)<30){
+          manualView.current=false;setManual(null);lastBlankTap.current=null
+        }else lastBlankTap.current={time:now,point}
+      }else lastBlankTap.current=null
       start.current=null
     }
     reset()
   }
-  const zoom=(factor:number)=>{const b=liveBox.current;setManual({x:b.x+b.width*(1-factor)/2,y:b.y+b.height*(1-factor)/2,width:b.width*factor,height:b.height*factor})}
   return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving} data-direct={!!directMode}>
-    <div className="sm-canvas-commandbar">{toolbar}<div className="sm-canvas-tools"><button aria-pressed={snapEnabled} onClick={()=>setSnapEnabled(v=>!v)} title="Align nearby part edges">Snap</button><button aria-pressed={orthoEnabled} onClick={()=>setOrthoEnabled(v=>!v)} title="Move strictly along one axis">Ortho</button><button onClick={()=>zoom(.8)} aria-label="Zoom in">＋</button><button onClick={()=>zoom(1.25)} aria-label="Zoom out">−</button><button onClick={()=>setManual(null)}>Fit All</button></div></div>
+    {toolbar?<div className="sm-canvas-commandbar">{toolbar}</div>:null}
     <svg ref={svg} className="sm-canvas" aria-label={area.name+' measurement worksheet'} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
       {layout.map(item=>{
         const {shape,points,local}=item,position=drag?.id===shape.id?drag.position:{x:item.x,y:item.y},g=calculate(shape)

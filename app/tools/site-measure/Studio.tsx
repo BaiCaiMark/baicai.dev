@@ -36,6 +36,8 @@ export default function Studio() {
   const [directMode,setDirectMode] = useState(false), [activeRef,setActiveRef] = useState<string|null>(null), [dimensionMode,setDimensionMode] = useState(false)
   const [workspaceOpen,setWorkspaceOpen] = useState(false), [workspaceMenuOpen,setWorkspaceMenuOpen] = useState(false), [addMenuOpen,setAddMenuOpen] = useState(false)
   const [partToolsOpen,setPartToolsOpen] = useState(false)
+  const [snapEnabled,setSnapEnabled] = useState(true), [orthoEnabled,setOrthoEnabled] = useState(false)
+  const [fitRequest,setFitRequest] = useState(0)
   useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
   const [renameId,setRenameId] = useState<string|null>(null), [renameDraft,setRenameDraft] = useState('')
@@ -219,6 +221,10 @@ export default function Studio() {
       <strong>Areas (temporary grouping)</strong>
       <div className="sm-v2-room-list">{project.areas.map(a=><button key={a.id} aria-pressed={a.id===area?.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setWorkspaceMenuOpen(false)}}>{a.name}</button>)}</div>
       <button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setWorkspaceMenuOpen(false)}}>＋ Area</button>
+      <strong>Canvas</strong>
+      <button onClick={()=>{setFitRequest(n=>n+1);setWorkspaceMenuOpen(false)}}>Fit All · double-tap empty canvas</button>
+      <button aria-pressed={snapEnabled} onClick={()=>setSnapEnabled(v=>!v)}>Snap · {snapEnabled?'On':'Off'} (align nearby Parts)</button>
+      <button aria-pressed={orthoEnabled} onClick={()=>setOrthoEnabled(v=>!v)}>Ortho · {orthoEnabled?'On':'Off'} (move horizontally / vertically)</button>
       <label className="sm-v2-unit">Units <select aria-label="Display units" value={project.unit} onChange={e=>edit(p=>{p.unit=e.target.value as Unit})}><option value="in">inch</option><option value="mm">mm</option></select></label>
       <button onClick={()=>{setExportOpen(v=>!v);setDefaultsOpen(false);setWorkspaceMenuOpen(false)}}>PDF / DXF Export</button>
       <button onClick={()=>{setDefaultsOpen(v=>!v);setExportOpen(false);setWorkspaceMenuOpen(false)}}>Overhang defaults</button>
@@ -256,7 +262,7 @@ export default function Studio() {
         <div className="sm-area-heading"><details ref={areaDetails} className="sm-area-settings"><summary>{area.name} <span>▾</span></summary><div><label>Area name<input aria-label="Area name" maxLength={120} value={area.name} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.name=e.target.value||'Unnamed area'},'area-name')} onBlur={end}/></label><label>Area notes<textarea aria-label="Area notes" maxLength={4000} value={area.notes} onChange={e=>edit(p=>{p.areas.find(a=>a.id===area.id)!.notes=e.target.value},'area-notes')} onBlur={end}/></label></div></details>
           <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button><details className="sm-template-picker"><summary>＋ Vanity Step</summary><div className="sm-template-picker-options"><p>Stepped bathroom vanity · choose the full-depth side.</p><button onClick={e=>{addShape('vanity-step-left');e.currentTarget.closest('details')!.open=false}}>Deep Left</button><button onClick={e=>{addShape('vanity-step-right');e.currentTarget.closest('details')!.open=false}}>Deep Right</button></div></details></div></div>
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
-          <MeasureCanvas key={area.id} area={area} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
+          <MeasureCanvas key={area.id+'-'+fitRequest} area={area} snapEnabled={snapEnabled} orthoEnabled={orthoEnabled} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
             floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?(dimensionMode?<CanvasDimensionEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>{setSelectedEdge(null);setDimensionMode(false)}}/>:<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):activeRef?(shape.references.find(r=>r.id===activeRef)?.kind==='sink'?<CanvasSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):null):null}
             toolbar={shape&&(!immersive||partToolsOpen)?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
               {renameId===shape.id?
