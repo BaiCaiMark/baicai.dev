@@ -53,3 +53,12 @@
 - 點尺寸可直接編輯、支持常用 inch 小數與分數；點 finished countertop 邊線可直接修改加工標記；兩個點擊目標不能混淆。
 - 工具列不應佔走畫布空間，操作步驟與表單層級保持最少，觸控命中區適合手指；本機自動存檔可靠，能再開啟未完成的工程。
 - 開發排序／實案驗收：先改善手機全螢幕工作區、手勢與尺寸輸入，再把快速加工顏色標記整合進同一畫布；PDF 交付優先，DXF 仍保留為後續驗證路線。
+
+## P2 交互實作紀錄
+- 沉浸式工作區頂部以「✎」（Edge marking）按鈕進入快速標記模式。選 Polish、No Polish 或 Miter 後可以連續點選多條 finished 邊；Done 離開。一般點選邊線仍可開啟細節編輯。
+- 三種現場顏色沿用 TFS 語意：Polish 綠色 #00FF00；No Polish 紅色 #FF0000；Miter 橙褐色 #CD6928。No Polish/Miter 使用虛線以輔助辨識；選取以獨立 halo 顯示，不能遮蓋加工顏色。
+- 新增 Part 的 OPEN/overhang 預設是建議，不會自動把預設加工類別渲染成已確認的彩色標記。只有明確標記才讓新 Part 的邊線上色；保留既有歷史工程內容。
+- 點加工標記只修改 `treatments[edge]`，不變更尺寸、cabinet、allowances、OPEN、幾何；支援 Undo/Redo、IndexedDB 儲存與備份。
+- PDF 的 completed finished perimeter 同步呈現彩色加工意圖，附現場參考／非製造核准的文字；DXF 既有輸出維持不變。
+- 基礎確認：94 項單元／幾何／輸出測試通過；2 項 P2 瀏覽器測試、4 項沉浸式／手勢控制測試通過；ESLint、TypeScript 與 Next.js production build 驗證。
+- **實機驗收仍待使用者在手機上確認**：顏色視認、Quick Mark 選取邊線、Undo/Redo、切換 Area、PDF 顏色與頁面可讀性。

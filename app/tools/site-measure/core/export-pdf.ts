@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import { bounds, referenceGeometry, transformPoint, type Point, type Snapshot } from './geometry'
-import { edgeOrder } from './model'
+import { edgeOrder, treatmentOf } from './model'
 import { formatLength } from './units'
 
 export async function loadPdfFont(): Promise<Uint8Array> {
@@ -81,7 +81,20 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
         points.forEach((p, i) => { const a = view(p), b = view(points[(i + 1) % points.length]); pdf.line(a.x, a.y, b.x, b.y) })
       }
       if (shape.basis === 'cabinet' && geometry.base) polygon(geometry.base, true)
-      if (geometry.top) polygon(geometry.top, false)
+      if (geometry.top) {
+        polygon(geometry.top, false)
+        // The measured finished edge carries field intent, not a machining instruction.
+        edgeOrder(shape).forEach((edge,i)=>{
+          const treatment=treatmentOf(shape,edge)
+          if(!treatment)return
+          const a=view(geometry.top![i]),b=view(geometry.top![(i+1)%geometry.top!.length])
+          const color: [number,number,number] = treatment==='polish'?[0,255,0]:treatment==='no-polish'?[255,0,0]:[205,105,40]
+          pdf.setDrawColor(...color);pdf.setLineWidth(0.85)
+          pdf.setLineDashPattern(treatment==='polish'?[]:[2.2,1.1],0)
+          pdf.line(a.x,a.y,b.x,b.y)
+        })
+        pdf.setLineDashPattern([],0)
+      }
       edgeOrder(shape).forEach((edge, i) => {
         const a = view(outline[i]), b = view(outline[(i + 1) % outline.length])
         pdf.setTextColor(30); pdf.setFontSize(9)
@@ -106,7 +119,7 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
       }
       pdf.setLineDashPattern([], 0)
       y = oy + bb.height * scale + 19
-      paragraph(geometry.top ? '實線：成品 / 灰虛線：櫃體 / 藍線：定位參考（非開孔）' : '僅顯示櫃體基準；成品輪廓未完成。', [85, 95, 90])
+      paragraph(geometry.top ? '成品線：綠 Polish / 紅虛線 No Polish / 橙虛線 Miter / 無色表示未標記。灰虛線：櫃體 / 藍線：定位參考。加工顏色為現場意圖，非製造核准。' : '僅顯示櫃體基準；成品輪廓未完成。', [85, 95, 90])
     } else paragraph('尺寸未完成或無效，沒有生成輪廓。', [160, 45, 35])
     for (const error of geometry.errors) paragraph('未完成：' + error, [160, 45, 35])
     for (const row of rows) paragraph(row.label + ': ' + row.text)

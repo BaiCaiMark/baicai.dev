@@ -154,6 +154,12 @@ export function duplicateShape(source: Shape, existingNames: string[], position:
 export function treatmentOf(shape: Shape, edge: Edge): Treatment | null {
   return shape.treatments?.[edge] ?? null
 }
+// On-canvas manufacturing annotation must NEVER mutate surveyed dimensions or overhangs.
+// Unlike the legacy quick-setup helper below, this only records the selected finish.
+export function markTreatment(shape: Shape, edge: Edge, treatment: Treatment): void {
+  shape.treatments ??= {}
+  shape.treatments[edge] = treatment
+}
 // Only replace blank or default-sourced values. Manual custom allowances remain untouched.
 export function setTreatment(shape: Shape, edge: Edge, treatment: Treatment, project: Project): void {
   shape.treatments ??= {}

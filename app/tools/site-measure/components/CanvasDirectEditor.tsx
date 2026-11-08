@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { edgeLength } from '../core/worksheet'
 import { formatLength, numeric, parseLength } from '../core/units'
-import { quantity, setEdgeOpen, setTreatment, treatmentOf, uid, value, type Edge, type Project, type Reference, type Shape, type Treatment, type Quantity } from '../core/model'
+import { quantity, setEdgeOpen, markTreatment, treatmentOf, uid, value, type Edge, type Project, type Reference, type Shape, type Treatment, type Quantity } from '../core/model'
 
 const names:Record<Edge,string>={back:'Back',right:'Right',front:'Front',left:'Left',innerX:'Inside horizontal',innerY:'Inside vertical'}
 const treatments:{id:Treatment;label:string}[]=[{id:'no-polish',label:'No Polish'},{id:'polish',label:'Polish'},{id:'miter',label:'Miter'}]
@@ -21,7 +21,7 @@ export function DirectEdgeEditor({project,shape,edge,onChange,onEnd,onClose,onAd
   const [showNote,setShowNote]=useState(false)
   const name=names[edge],treatment=treatmentOf(shape,edge),edgeOpen=shape.openEdges?.[edge]
   const note=shape.fieldRecords.findLast(r=>r.kind==='note'&&r.edge===edge)
-  const editTreatment=(kind:Treatment)=>{onChange(s=>setTreatment(s,edge,kind,project));onEnd()}
+  const editTreatment=(kind:Treatment)=>{onChange(s=>markTreatment(s,edge,kind));onEnd()}
   const addNote=()=>{
     if(!note&&shape.fieldRecords.length<80)onChange(s=>s.fieldRecords.push({id:uid(),kind:'note',edge,text:''}))
     setShowNote(true);onEnd()
@@ -33,7 +33,7 @@ export function DirectEdgeEditor({project,shape,edge,onChange,onEnd,onClose,onAd
       <strong>Exposure</strong><div><button type="button" aria-pressed={edgeOpen===true} onClick={()=>{onChange(s=>setEdgeOpen(s,edge,true,project));onEnd()}}>OPEN</button><button type="button" aria-pressed={edgeOpen===false} onClick={()=>{onChange(s=>setEdgeOpen(s,edge,false,project));onEnd()}}>Not OPEN</button></div>
     </div>
     <div className="sm-direct-treatment"><div className="sm-direct-label"><strong>Edge Treatment</strong></div>
-      <div className="sm-direct-chips" aria-label={name+' treatment'}>{treatments.map(t=><button key={t.id} type="button" aria-pressed={treatment===t.id} onClick={()=>editTreatment(t.id)}>{t.label}</button>)}</div>
+      <div className="sm-direct-chips" aria-label={name+' treatment'}>{treatments.map(t=><button key={t.id} data-treatment={t.id} type="button" aria-pressed={treatment===t.id} onClick={()=>editTreatment(t.id)}>{t.label}</button>)}</div>
     </div>
     {treatment==='miter'?<small className="sm-direct-warning">Miter is recorded without automatic slab-thickness compensation.</small>:null}
     <div className="sm-direct-note-actions"><button onClick={addNote}>{note?'✎ Edit Note':'＋ Note'}</button><button onClick={onAdvanced}>Advanced</button></div>

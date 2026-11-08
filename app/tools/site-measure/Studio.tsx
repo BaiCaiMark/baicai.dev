@@ -10,7 +10,7 @@ import OfflineStatus from './OfflineStatus'
 import QuantityField from './components/QuantityField'
 import { calculate, exportSnapshot } from './core/geometry'
 import { historyReducer, initialHistory } from './core/history'
-import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, nextPartNameForArea, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape } from './core/model'
+import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, markTreatment, nextPartNameForArea, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape, type Treatment } from './core/model'
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
 import type { Unit } from './core/units'
@@ -38,6 +38,7 @@ export default function Studio() {
   const [partToolsOpen,setPartToolsOpen] = useState(false)
   const [snapEnabled,setSnapEnabled] = useState(true), [orthoEnabled,setOrthoEnabled] = useState(false)
   const [fitRequest,setFitRequest] = useState(0)
+  const [paintOpen,setPaintOpen] = useState(false), [paintTreatment,setPaintTreatment] = useState<Treatment|null>(null)
   useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
   const [renameId,setRenameId] = useState<string|null>(null), [renameDraft,setRenameDraft] = useState('')
@@ -107,6 +108,7 @@ export default function Studio() {
     setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
     setSavedProject(version === undefined ? null : p)
     setWorkspaceOpen(true); setWorkspaceMenuOpen(false); setAddMenuOpen(false); setPartToolsOpen(false); setDirectMode(true)
+    setPaintOpen(false); setPaintTreatment(null)
     dispatch({ type: 'load', project: p })
   }
   const open = async (id: string) => {
@@ -149,7 +151,12 @@ export default function Studio() {
       : newShape(template as Shape['template'], project.unit, area.shapes.length + 1)
     if(directMode)s.name=nextPartNameForArea(area)
     applyRectangleQuickDefaults(s,project)
-    if(directMode) applyCanvasOpenDefaults(s,project)
+    if(directMode){
+      applyCanvasOpenDefaults(s,project)
+      // Suggestions for OPEN and allowance do not imply confirmed manufacturing markings.
+      // An edge becomes colored only after an explicit field-treatment choice.
+      s.treatments={}
+    }
     const existing = worksheetLayout(area.shapes)
     s.layout = {x:100,y:Math.min(10000,Math.max(-90,...existing.map(p=>p.y+p.height))+200)}
     edit(p => { p.areas.find(a => a.id === area.id)!.shapes.push(s) }); setShapeId(s.id); setSelectedEdge(null); setActiveRef(null);setDimensionMode(false);setPanelOpen(!directMode);setAdvanced(false)
@@ -201,12 +208,13 @@ export default function Studio() {
   }, [immersive])
   return <div className="sm-studio" data-active={!!project} data-immersive={immersive} lang="en">
     {immersive&&project?<div className="sm-v2-dock" role="toolbar" aria-label="Workspace">
-      <div className="sm-v2-left"><button type="button" onClick={()=>{end();setWorkspaceOpen(false);setWorkspaceMenuOpen(false);setAddMenuOpen(false);setPartToolsOpen(false);setPanelOpen(false);setSelectedEdge(null);setActiveRef(null)}} aria-label="Back to projects">← Projects</button><strong title={project.name}>{project.name}</strong></div>
+      <div className="sm-v2-left"><button type="button" onClick={()=>{end();setWorkspaceOpen(false);setWorkspaceMenuOpen(false);setAddMenuOpen(false);setPartToolsOpen(false);setPaintOpen(false);setPaintTreatment(null);setPanelOpen(false);setSelectedEdge(null);setActiveRef(null)}} aria-label="Back to projects">← Projects</button><strong title={project.name}>{project.name}</strong></div>
       <div className="sm-v2-right">
         <button type="button" onClick={()=>dispatch({type:'undo'})} disabled={!history.past.length} aria-label="Undo">↶</button>
         <button type="button" onClick={()=>dispatch({type:'redo'})} disabled={!history.future.length} aria-label="Redo">↷</button>
         <button type="button" aria-label="Add a part" aria-expanded={addMenuOpen} onClick={()=>{setAddMenuOpen(v=>!v);setWorkspaceMenuOpen(false);setPartToolsOpen(false)}}>＋</button>
         <button type="button" aria-label="Part actions" disabled={!shape} aria-pressed={partToolsOpen} onClick={()=>{setPartToolsOpen(v=>!v);setAddMenuOpen(false);setWorkspaceMenuOpen(false)}}>Part</button>
+        <button type="button" aria-label="Edge marking" aria-pressed={paintOpen} title="Quick edge marking" onClick={()=>{setPaintOpen(v=>!v);setPaintTreatment(null);setSelectedEdge(null);setActiveRef(null);setPanelOpen(false);setPartToolsOpen(false);setAddMenuOpen(false);setWorkspaceMenuOpen(false)}}>✎</button>
         <button type="button" aria-label="Workspace menu" aria-expanded={workspaceMenuOpen} onClick={()=>{setWorkspaceMenuOpen(v=>!v);setAddMenuOpen(false);setPartToolsOpen(false)}}>⋯</button>
       </div>
     </div>:null}
@@ -263,6 +271,12 @@ export default function Studio() {
           <div className="sm-actions"><button onClick={()=>addShape('rectangle')}>＋ Rectangle</button><button onClick={()=>addShape('l')}>＋ L-shape</button><details className="sm-template-picker"><summary>＋ Vanity Step</summary><div className="sm-template-picker-options"><p>Stepped bathroom vanity · choose the full-depth side.</p><button onClick={e=>{addShape('vanity-step-left');e.currentTarget.closest('details')!.open=false}}>Deep Left</button><button onClick={e=>{addShape('vanity-step-right');e.currentTarget.closest('details')!.open=false}}>Deep Right</button></div></details></div></div>
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
           <MeasureCanvas key={area.id+'-'+fitRequest} area={area} snapEnabled={snapEnabled} orthoEnabled={orthoEnabled} selected={shape?.id??null} selectedEdge={selectedEdge&&shape?{partId:shape.id,edge:selectedEdge}:null} selectedReference={directMode?activeRef:null} directMode={directMode} unit={project.unit} moving={moving===shape?.id?moving:null}
+            paintToolbar={immersive&&paintOpen?<div className="sm-paint-toolbar" role="toolbar" aria-label="Paint edge treatment">
+              <span className="sm-paint-heading">Mark edge</span>
+              {([['polish','Polish'],['no-polish','No Polish'],['miter','Miter']] as const).map(([kind,label])=><button key={kind} type="button" data-treatment={kind} aria-pressed={paintTreatment===kind} onClick={()=>{setPaintTreatment(kind);setSelectedEdge(null);setActiveRef(null)}}><span className="sm-paint-swatch"/>{label}</button>)}
+              <button type="button" className="sm-paint-exit" onClick={()=>{setPaintOpen(false);setPaintTreatment(null)}}>Done</button>
+              <small>{paintTreatment?'Tap finished edges · '+paintTreatment:'Choose a finish, then tap edges'}</small>
+            </div>:null}
             floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?(dimensionMode?<CanvasDimensionEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>{setSelectedEdge(null);setDimensionMode(false)}}/>:<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):activeRef?(shape.references.find(r=>r.id===activeRef)?.kind==='sink'?<CanvasSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):null):null}
             toolbar={shape&&(!immersive||partToolsOpen)?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
               {renameId===shape.id?
@@ -283,7 +297,17 @@ export default function Studio() {
             </div>:null}
             onSelect={id=>selectPart(id,!directMode)}
             onRename={beginRename}
-            onEdge={selection=>{end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(false);setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false);setMoving(null);setDeleteTarget(null)}}
+            onEdge={selection=>{
+              if(paintOpen&&paintTreatment&&directMode){
+                const current=area.shapes.find(s=>s.id===selection.partId)
+                if(current?.treatments?.[selection.edge]!==paintTreatment){
+                  edit(p=>{const s=p.areas.find(a=>a.id===area.id)?.shapes.find(s=>s.id===selection.partId);if(s)markTreatment(s,selection.edge,paintTreatment)})
+                  end()
+                }
+                setShapeId(selection.partId);setSelectedEdge(null);setActiveRef(null);setPanelOpen(false);return
+              }
+              end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(false);setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false);setMoving(null);setDeleteTarget(null)
+            }}
             onDimension={selection=>{end();setShapeId(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(true);setActiveRef(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}
             onReference={(partId,refId)=>{end();setShapeId(partId);setActiveRef(refId);setSelectedEdge(null);setDimensionMode(false);setPanelOpen(!directMode);setAdvanced(true);setMoving(null);setDeleteTarget(null)}}
             onPlace={(id,position)=>edit(p=>{p.areas.find(a=>a.id===area.id)!.shapes.find(s=>s.id===id)!.layout=position})}/>
