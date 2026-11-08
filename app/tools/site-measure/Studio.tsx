@@ -14,6 +14,7 @@ import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, markTreatment, ne
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
 import { canvasNoteAt, movedCanvasNote } from './core/canvas-notes'
+import { appendWallStroke, makeWallSketch, WALL_MAX_POINTS, WALL_MAX_SKETCHES } from './core/wall-sketch'
 import { adoptSharedCanvas, projectCanvasItems } from './core/project-canvas'
 import type { Unit } from './core/units'
 
@@ -47,6 +48,8 @@ export default function Studio() {
   const [paintOpen,setPaintOpen] = useState(false), [paintTreatment,setPaintTreatment] = useState<Treatment|null>(null)
   const [noteTool,setNoteTool] = useState<{mode:'new'|'retarget';id?:string}|null>(null)
   const [noteDraft,setNoteDraft] = useState<{note:CanvasNote;existing:boolean}|null>(null)
+  const [wallDraft,setWallDraft] = useState<{x:number;y:number}[]|null>(null)
+  const [selectedWallId,setSelectedWallId] = useState<string|null>(null)
   useEffect(()=>{if(new URLSearchParams(window.location.search).get('direct')==='1')queueMicrotask(()=>setDirectMode(true))},[])
   const [moving,setMoving] = useState<string|null>(null), [deleteTarget,setDeleteTarget] = useState<string|null>(null), [partMessage,setPartMessage] = useState('')
   const [renameId,setRenameId] = useState<string|null>(null), [renameDraft,setRenameDraft] = useState('')
@@ -81,10 +84,33 @@ export default function Studio() {
     cancelAreaRename()
   }
   const edit = (recipe: (p: Project) => void, group?: string) => dispatch({ type: 'edit', recipe, group })
+  const beginWallSketch=()=>{
+    if(!project)return
+    if((project.wallSketches??[]).length>=WALL_MAX_SKETCHES){setError('Limit: 50 wall sketches per project');return}
+    setWallDraft([]);setSelectedWallId(null)
+    setNoteTool(null);setNoteDraft(null)
+    setPaintOpen(false);setPaintTreatment(null);setPanelOpen(false);setPartToolsOpen(false);setSelectedEdge(null);setActiveRef(null)
+    setAddMenuOpen(false);setWorkspaceMenuOpen(false)
+  }
+  const finishWallSketch=()=>{
+    if(!project||!wallDraft||wallDraft.length<2)return
+    try {
+      const id=uid(),name='Wall sketch '+((project.wallSketches?.length??0)+1)
+      const sketch=makeWallSketch(id,name,wallDraft)
+      edit(p=>{p.wallSketches??=[];if(p.wallSketches.length<WALL_MAX_SKETCHES)p.wallSketches.push(sketch)})
+      end();setWallDraft(null);setSelectedWallId(null)
+    }catch(e){setError(errorText(e))}
+  }
+  const removeWallSketch=()=>{
+    if(!selectedWallId)return
+    const id=selectedWallId
+    edit(p=>{p.wallSketches=(p.wallSketches??[]).filter(w=>w.id!==id)})
+    end();setSelectedWallId(null)
+  }
   const beginCanvasNote = () => {
     if(!project)return
     if((project.canvasNotes??[]).length>=100){setError('Limit: 100 canvas notes per project');return}
-    setNoteTool({mode:'new'});setNoteDraft(null);setAddMenuOpen(false);setWorkspaceMenuOpen(false)
+    setWallDraft(null);setSelectedWallId(null);setNoteTool({mode:'new'});setNoteDraft(null);setAddMenuOpen(false);setWorkspaceMenuOpen(false)
     setPaintOpen(false);setPaintTreatment(null);setPanelOpen(false);setPartToolsOpen(false);setSelectedEdge(null);setActiveRef(null)
   }
   const pickNoteTarget = (point:{x:number;y:number}) => {
@@ -188,7 +214,7 @@ export default function Studio() {
     setError(''); setExportOpen(false); setPanelOpen(false); setSelectedEdge(null); setSaveState(version === undefined ? 'Not saved yet' : 'Saved in this browser')
     setSavedProject(version === undefined ? null : p)
     setWorkspaceOpen(true); setWorkspaceMenuOpen(false); setAddMenuOpen(false); setPartToolsOpen(false); setDirectMode(true)
-    setPaintOpen(false); setPaintTreatment(null); setRoomFocus(null); cancelAreaRename();setNoteTool(null);setNoteDraft(null)
+    setPaintOpen(false); setPaintTreatment(null); setRoomFocus(null); cancelAreaRename();setNoteTool(null);setNoteDraft(null);setWallDraft(null);setSelectedWallId(null)
     dispatch({ type: 'load', project: workspaceProject })
   }
   const open = async (id: string) => {
@@ -289,7 +315,7 @@ export default function Studio() {
   }, [immersive])
   return <div className="sm-studio" data-active={!!project} data-immersive={immersive} lang="en">
     {immersive&&project?<div className="sm-v2-dock" role="toolbar" aria-label="Workspace">
-      <div className="sm-v2-left"><button type="button" onClick={()=>{end();setWorkspaceOpen(false);setWorkspaceMenuOpen(false);setAddMenuOpen(false);setPartToolsOpen(false);setPaintOpen(false);setPaintTreatment(null);setPanelOpen(false);setSelectedEdge(null);setActiveRef(null);setNoteTool(null);setNoteDraft(null)}} aria-label="Back to projects">← Projects</button><strong title={project.name}>{project.name}</strong></div>
+      <div className="sm-v2-left"><button type="button" onClick={()=>{end();setWorkspaceOpen(false);setWorkspaceMenuOpen(false);setAddMenuOpen(false);setPartToolsOpen(false);setPaintOpen(false);setPaintTreatment(null);setPanelOpen(false);setSelectedEdge(null);setActiveRef(null);setNoteTool(null);setNoteDraft(null);setWallDraft(null);setSelectedWallId(null)}} aria-label="Back to projects">← Projects</button><strong title={project.name}>{project.name}</strong></div>
       <div className="sm-v2-right">
         <button type="button" onClick={()=>dispatch({type:'undo'})} disabled={!history.past.length} aria-label="Undo">↶</button>
         <button type="button" onClick={()=>dispatch({type:'redo'})} disabled={!history.future.length} aria-label="Redo">↷</button>
@@ -306,6 +332,7 @@ export default function Studio() {
       <button onClick={()=>{addShape('vanity-step-left');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Left</button>
       <button onClick={()=>{addShape('vanity-step-right');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Right</button>
       <button type="button" onClick={beginCanvasNote}>＋ Note · field annotation</button>
+      <button type="button" onClick={beginWallSketch}>＋ Wall sketch · schematic</button>
     </div>:null}
     {immersive&&workspaceMenuOpen&&project?<div className="sm-v2-popover sm-v2-menu" role="group" aria-label="Workspace options">
       <strong>Rooms · all Parts share one canvas</strong>
@@ -369,7 +396,7 @@ export default function Studio() {
       {projects.length?<div className="sm-recent"><h3>Continue a project</h3>{projects.slice(0,5).map(p=><button key={p.id} onClick={()=>void open(p.id)}>{p.name}<span>Open →</span></button>)}</div>:null}
       <p className="sm-muted">Projects stay in this browser. Keep a portable backup. Preview and production use separate local storage.</p>
     </section>:<>
-      {exportOpen?<section className="sm-export-panel"><div><h2>Export field worksheet</h2><p>PDF keeps Part / Edge readings and notes. Canvas Notes are saved in the project backup but are not in the PDF yet (planned for P5.3). DXF includes only complete geometry. Review before fabrication.</p>{excluded.length?<p className="sm-error-text">Excluded from DXF: {excluded.map(e=>e.area.name+' / '+e.shape.name).join(', ')}</p>:null}</div><div className="sm-actions"><button disabled={busy} onClick={()=>void exportFile('pdf')}>{busy?'Working…':'Export PDF'}</button><button disabled={busy||!all?.entries.some(e=>e.geometry.top)} onClick={()=>void exportFile('dxf')}>Export DXF</button></div></section>:null}
+      {exportOpen?<section className="sm-export-panel"><div><h2>Export field worksheet</h2><p>PDF keeps Part / Edge readings and notes. Canvas Notes and schematic Wall Sketches are saved in the project backup but are not in the PDF yet (planned for P5.3). DXF includes only complete geometry. Review before fabrication.</p>{excluded.length?<p className="sm-error-text">Excluded from DXF: {excluded.map(e=>e.area.name+' / '+e.shape.name).join(', ')}</p>:null}</div><div className="sm-actions"><button disabled={busy} onClick={()=>void exportFile('pdf')}>{busy?'Working…':'Export PDF'}</button><button disabled={busy||!all?.entries.some(e=>e.geometry.top)} onClick={()=>void exportFile('dxf')}>Export DXF</button></div></section>:null}
       {defaultsOpen?<section className="sm-defaults"><div><h2>Project overhang defaults</h2><p>Apply only to a named edge. Changing these values does not change existing parts.</p></div>{(['end','front'] as const).map(key=><QuantityField key={key} label={key==='end'?'Typical end overhang':'Typical front overhang'} quantity={project.defaults[key]} unit={project.unit} allowance onEnd={end} onChange={q=>edit(p=>{p.defaults[key]=q;p.defaults.revision++},'default-'+key)}/>)}</section>:null}
       <div className="sm-area-bar"><div className="sm-area-tabs" aria-label="Areas">{project.areas.map(a=><button key={a.id} aria-pressed={area?.id===a.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setRoomFocus({id:a.id})}}>{a.name}<span>{a.shapes.length} parts</span></button>)}</div><button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}>＋ Area</button></div>
       {area?<>
@@ -378,6 +405,24 @@ export default function Studio() {
         <div className="sm-workspace" data-editor={panelOpen&&!!shape}>
           <MeasureCanvas key={project.id} area={area} areas={project.areas}
             canvasNotes={project.canvasNotes??[]} notePlacement={!!noteTool}
+            wallSketches={project.wallSketches??[]} wallDraft={wallDraft}
+            selectedWallId={selectedWallId} onWallStroke={points=>setWallDraft(d=>d===null?null:appendWallStroke(d,points))}
+            onSelectWall={id=>{setSelectedWallId(id);setNoteDraft(null);setNoteTool(null);setSelectedEdge(null);setActiveRef(null)}}
+            wallEditor={wallDraft!==null?<div className="sm-wall-editor" role="group" aria-label="Draw schematic wall">
+              <strong>Draw an irregular wall</strong>
+              <p>Tap to add corners or trace with a finger / stylus. Illustrative only — NOT CNC geometry.</p>
+              <span>{wallDraft.length} points (max {WALL_MAX_POINTS})</span>
+              <div className="sm-wall-actions">
+                <button type="button" onClick={()=>setWallDraft(points=>points?.slice(0,-1)??null)} disabled={!wallDraft.length}>Undo point</button>
+                <button type="button" onClick={finishWallSketch} disabled={wallDraft.length<2}>Finish wall</button>
+                <button type="button" onClick={()=>setWallDraft(null)}>Cancel</button>
+              </div>
+            </div>:selectedWallId?<div className="sm-wall-editor" role="group" aria-label="Schematic wall actions">
+              <strong>Schematic wall · not measured</strong>
+              <p>This sketch is a field guide only, not CNC geometry.</p>
+              <button type="button" onClick={()=>setSelectedWallId(null)}>Close</button>
+              <button type="button" className="sm-danger" onClick={removeWallSketch}>Delete wall sketch</button>
+            </div>:null}
             selectedCanvasNoteId={noteDraft?.note.id??null}
             onPickNoteTarget={pickNoteTarget} onCancelNotePlacement={()=>setNoteTool(null)}
             onSelectCanvasNote={openCanvasNote} onMoveCanvasNote={placeCanvasNote}

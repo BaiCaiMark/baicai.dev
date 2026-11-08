@@ -88,7 +88,7 @@ test('P5.1 pin retarget, cancel and delete never fabricate dimensions',async({pa
   await expect(page.locator('[data-canvas-note]')).toHaveCount(1)
   await page.getByRole('button',{name:'Workspace menu'}).click()
   await page.getByRole('button',{name:'PDF / DXF Export'}).click()
-  await expect(page.locator('.sm-export-panel')).toContainText('Canvas Notes are saved in the project backup')
+  await expect(page.locator('.sm-export-panel')).toContainText('Canvas Notes and schematic Wall Sketches are saved in the project backup')
 })
 
 test('leader line has a generous phone tap target; tap opens Note and drag pans without moving the note',async({page})=>{

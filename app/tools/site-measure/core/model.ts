@@ -36,6 +36,13 @@ export const canvasNoteSchema = z.object({
   targetY: z.number().finite().min(-10000).max(10000),
 }).strict()
 export type CanvasNote = z.infer<typeof canvasNoteSchema>
+const canvasPointSchema=z.object({x:z.number().finite().min(-10000).max(10000),y:z.number().finite().min(-10000).max(10000)}).strict()
+export const wallSketchSchema=z.object({
+  id, name:z.string().min(1).max(120),
+  kind:z.literal('schematic'),
+  points:z.array(canvasPointSchema).min(2).max(120),
+}).strict()
+export type WallSketch=z.infer<typeof wallSketchSchema>
 const dimensionsSchema = z.object({ width: quantitySchema, height: quantitySchema, legX: quantitySchema, legY: quantitySchema }).strict()
 export const shapeSchema = z.object({
   id, name: z.string().min(1).max(120), template: z.enum(['rectangle', 'l']),
@@ -63,11 +70,12 @@ const currentProjectSchema = z.object({
   revision: z.number().int().min(0), updatedAt: z.string().datetime(), unit: z.enum(['in', 'mm']),
   defaults: z.object({ revision: z.number().int().min(0), end: quantitySchema, front: quantitySchema }).strict(),
   canvasNotes: z.array(canvasNoteSchema).max(100).optional(),
+  wallSketches: z.array(wallSketchSchema).max(50).optional(),
   areas: z.array(z.object({
     id, name: z.string().min(1).max(120), notes: text, shapes: z.array(shapeSchema).max(60),
   }).strict()).min(1).max(30),
 }).strict().superRefine((p, ctx) => {
-  const ids = [p.id, ...(p.canvasNotes??[]).map(note=>note.id), ...p.areas.flatMap(a => [a.id, ...a.shapes.flatMap(s => [s.id, ...s.references.map(r => r.id), ...s.fieldRecords.map(r=>r.id)])])]
+  const ids = [p.id, ...(p.canvasNotes??[]).map(note=>note.id), ...(p.wallSketches??[]).map(wall=>wall.id), ...p.areas.flatMap(a => [a.id, ...a.shapes.flatMap(s => [s.id, ...s.references.map(r => r.id), ...s.fieldRecords.map(r=>r.id)])])]
   if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', message: 'Duplicate identifiers / 重複識別碼' })
   if (p.areas.reduce((sum, a) => sum + a.shapes.length, 0) > 200) ctx.addIssue({ code: 'custom', message: 'Maximum 200 shapes / 最多 200 個形狀' })
 })
@@ -127,7 +135,7 @@ export function newProject(): Project {
   return {
     schemaVersion: 2, id: uid(), name: 'New measurement project', revision: 0, updatedAt: new Date().toISOString(), unit: 'in',
     defaults: { revision: 0, end: quantity('1', 'in', 'allowance'), front: quantity('1.5', 'in', 'allowance') },
-    canvasNotes: [],
+    canvasNotes: [], wallSketches: [],
     areas: [{ id: uid(), name: 'Kitchen', notes: '', shapes: [] }],
   }
 }

@@ -403,3 +403,20 @@ html.sm-v2-open .site-header,html.sm-v2-open .site-footer,html.sm-v2-open .skip-
 .sm-note-editor-actions button{flex:1;min-height:44px}
 .sm-note-editor-actions button:first-child{background:var(--sm-green);color:var(--sm-paper)}
 .sm-note-editor-actions .sm-note-delete{color:var(--sm-danger);border-color:var(--sm-danger)}
+
+/* P5.2 schematic wall sketch: descriptive field lines only, NEVER DXF contours. */
+.sm-wall-path{fill:none;stroke:#a66330;stroke-width:3.4;stroke-dasharray:12 5;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;pointer-events:none}
+.sm-wall-hit{fill:none;stroke:transparent;stroke-width:32;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:pointer}
+.sm-wall-sketch[data-selected="true"] .sm-wall-path{stroke:#d07628;stroke-width:4.5}
+.sm-wall-caption{font-size:13px;fill:#92542a;stroke:var(--sm-paper);stroke-width:3;paint-order:stroke;pointer-events:none}
+.sm-wall-preview path{fill:none;stroke:#a66330;stroke-width:3;stroke-dasharray:7 5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.sm-wall-preview circle{fill:#fff5e8;stroke:#a66330;stroke-width:2;vector-effect:non-scaling-stroke}
+.sm-canvas-shell[data-wall-drawing="true"] .sm-canvas{cursor:crosshair}
+.sm-wall-editor-slot{position:absolute;z-index:24;bottom:40px;left:50%;transform:translateX(-50%);width:min(380px,calc(100% - 20px));border:1px solid #a66330;border-radius:11px;background:var(--sm-paper);box-shadow:0 5px 22px #14372b25;padding:12px}
+.sm-wall-editor{display:flex;flex-direction:column;gap:5px}
+.sm-wall-editor strong{font-size:14px}
+.sm-wall-editor p,.sm-wall-editor span{font-size:11px;color:var(--sm-muted)}
+.sm-wall-actions{display:flex;flex-wrap:wrap;gap:5px;padding-top:5px}
+.sm-wall-actions button{flex:1 1 auto;min-height:46px}
+.sm-wall-actions button:nth-child(2){background:var(--sm-green);color:var(--sm-paper)}
+.sm-wall-editor>button{min-height:46px}

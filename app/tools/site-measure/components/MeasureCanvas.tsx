@@ -4,21 +4,24 @@ import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Po
 import { sinkPin } from './sink-pin'
 import { dimensionLabelLayout } from './dimension-label'
 import { canvasNoteLines, noteCardHeight, NOTE_WIDTH } from '../core/canvas-notes'
-import { edgeOrder, treatmentOf, value, type Area, type Edge, type CanvasNote } from '../core/model'
+import { wallPath, WALL_MAX_POINTS } from '../core/wall-sketch'
+import { edgeOrder, treatmentOf, value, type Area, type Edge, type CanvasNote, type WallSketch } from '../core/model'
 import { projectCanvasItems } from '../core/project-canvas'
 import { edgeNames, edgeLength, finishedEdgeReading, finishedFormula } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
-type Props = { area: Area; areas: Area[]; canvasNotes: CanvasNote[]; notePlacement?: boolean; selectedCanvasNoteId?: string | null; noteEditor?: ReactNode; onPickNoteTarget: (point: Point) => void; onCancelNotePlacement: () => void; onSelectCanvasNote: (id: string) => void; onMoveCanvasNote: (id: string, point: Point) => void; fitRequest?: number; roomFocus?: {id:string} | null; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
+type Props = { area: Area; areas: Area[]; wallSketches: WallSketch[]; wallDraft: Point[] | null; wallEditor?: ReactNode; onWallStroke:(points:Point[])=>void; onSelectWall:(id:string)=>void; selectedWallId?:string|null; canvasNotes: CanvasNote[]; notePlacement?: boolean; selectedCanvasNoteId?: string | null; noteEditor?: ReactNode; onPickNoteTarget: (point: Point) => void; onCancelNotePlacement: () => void; onSelectCanvasNote: (id: string) => void; onMoveCanvasNote: (id: string, point: Point) => void; fitRequest?: number; roomFocus?: {id:string} | null; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
 const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
-export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement = false, selectedCanvasNoteId = null, noteEditor, onPickNoteTarget, onCancelNotePlacement, onSelectCanvasNote, onMoveCanvasNote, fitRequest=0, roomFocus, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
+export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wallEditor, onWallStroke, onSelectWall, selectedWallId=null, canvasNotes, notePlacement = false, selectedCanvasNoteId = null, noteEditor, onPickNoteTarget, onCancelNotePlacement, onSelectCanvasNote, onMoveCanvasNote, fitRequest=0, roomFocus, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
-  const start = useRef<{x:number;y:number;noteId:string|null;notePosition:Point|null;partId:string|null;edge:Edge|null;dimension:boolean;nameTap:boolean;refId:string|null;position:Point|null;handle:boolean} | null>(null)
+  const start = useRef<{x:number;y:number;wallId:string|null;noteId:string|null;notePosition:Point|null;partId:string|null;edge:Edge|null;dimension:boolean;nameTap:boolean;refId:string|null;position:Point|null;handle:boolean} | null>(null)
   const moved = useRef(false)
+  const wallStroke=useRef<{pointerId:number;points:Point[];lastScreen:Point}|null>(null)
+  const [wallPreview,setWallPreview]=useState<Point[]>([])
   const [manual,setManual]=useState<Bounds|null>(null),[ratio,setRatio]=useState(1.8)
   const [canvasSize,setCanvasSize]=useState({width:1000,height:600})
   const manualView=useRef(false)
@@ -29,14 +32,15 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
   const lastBlankTap = useRef<{time:number;point:Point}|null>(null)
   const layout=useMemo(()=>projectCanvasItems(areas),[areas])
   const fitted=useMemo(()=>{
-    if(!layout.length&&!canvasNotes.length)return{x:0,y:0,width:1100,height:650}
+    if(!layout.length&&!canvasNotes.length&&!wallSketches.length)return{x:0,y:0,width:1100,height:650}
     const extents=[
       ...layout.map(p=>({x:p.x,y:p.y,right:p.x+p.width,bottom:p.y+p.height})),
-      ...canvasNotes.map(n=>({x:Math.min(n.x,n.targetX),y:Math.min(n.y,n.targetY),right:Math.max(n.x+NOTE_WIDTH,n.targetX),bottom:Math.max(n.y+noteCardHeight(n.text),n.targetY)}))
+      ...canvasNotes.map(n=>({x:Math.min(n.x,n.targetX),y:Math.min(n.y,n.targetY),right:Math.max(n.x+NOTE_WIDTH,n.targetX),bottom:Math.max(n.y+noteCardHeight(n.text),n.targetY)})),
+      ...wallSketches.flatMap(w=>w.points.map(p=>({x:p.x,y:p.y,right:p.x,bottom:p.y})))
     ]
     const x=Math.min(...extents.map(p=>p.x))-120,y=Math.min(...extents.map(p=>p.y))-150
     return{x,y,width:Math.max(...extents.map(p=>p.right+120))-x,height:Math.max(...extents.map(p=>p.bottom+110))-y}
-  },[layout,canvasNotes])
+  },[layout,canvasNotes,wallSketches])
   const fit=useMemo(()=>{
     const box={...fitted}
     if(box.width/box.height<ratio){const w=box.height*ratio;box.x-=(w-box.width)/2;box.width=w}
@@ -170,17 +174,27 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
   const down=(e:PointerEvent<SVGSVGElement>)=>{
     if(e.pointerType==='mouse'&&e.button!==0)return
     e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    if(wallDraft!==null&&pointers.current.size===1){
+      const matrix=svg.current?.getScreenCTM()
+      if(matrix){
+        const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse())
+        const startPoint={x:p.x,y:p.y}
+        wallStroke.current={pointerId:e.pointerId,points:[startPoint],lastScreen:{x:e.clientX,y:e.clientY}}
+        setWallPreview([startPoint])
+      }
+      start.current=null;moved.current=false;reset();return
+    }
     if(pointers.current.size===1){
-      const target=e.target as Element, noteId=notePlacement?null:(target.closest('[data-canvas-note]')?.getAttribute('data-canvas-note')??null)
+      const target=e.target as Element, wallId=notePlacement?null:(target.closest('[data-wall-sketch]')?.getAttribute('data-wall-sketch')??null), noteId=notePlacement?null:(target.closest('[data-canvas-note]')?.getAttribute('data-canvas-note')??null)
       const note=canvasNotes.find(n=>n.id===noteId)
       const handle=!!target.closest('[data-move-handle]')
       const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??null
-      let partId=noteId||notePlacement?null:(target.closest('[data-shape]')?.getAttribute('data-shape')??null)
+      let partId=noteId||wallId||notePlacement?null:(target.closest('[data-shape]')?.getAttribute('data-shape')??null)
       const dimension=!notePlacement&&!noteId&&!!directMode&&!!target.closest('[data-dimension]')
       const nameTap=!notePlacement&&!noteId&&!!directMode&&!!target.closest('[data-part-title]')
       let edge=target.closest('[data-dimension]')?.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
       if(!edge&&target.closest('.sm-direct-edge-name,.sm-direct-note-pin'))edge=target.closest('[data-edge]')?.getAttribute('data-edge') as Edge|null
-      if(!notePlacement&&!noteId&&!handle&&!dimension&&!edge&&!refId&&!nameTap){
+      if(!notePlacement&&!noteId&&!wallId&&!handle&&!dimension&&!edge&&!refId&&!nameTap){
         const candidates:ScreenEdge[]=[]
         // Resolve all nearby edges in screen space, independent of transparent stroke paint order.
         e.currentTarget.querySelectorAll<SVGLineElement>('.sm-edge-hit').forEach(line=>{
@@ -194,13 +208,26 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
       }
       const item=layout.find(p=>p.shape.id===partId)
       if(partId)lastBlankTap.current=null
-      start.current={x:e.clientX,y:e.clientY,noteId,notePosition:note&&!!target.closest('.sm-canvas-note-card')?{x:note.x,y:note.y}:null,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
-    }else{moved.current=true;start.current=null;lastBlankTap.current=null;liveDrag.current=null;setDrag(null);liveNoteDrag.current=null;setNoteDrag(null)}
+      start.current={x:e.clientX,y:e.clientY,wallId,noteId,notePosition:note&&!!target.closest('.sm-canvas-note-card')?{x:note.x,y:note.y}:null,partId,edge,dimension,nameTap,refId,position:item?{x:item.x,y:item.y}:null,handle};moved.current=false
+    }else{moved.current=true;start.current=null;lastBlankTap.current=null;liveDrag.current=null;setDrag(null);liveNoteDrag.current=null;setNoteDrag(null);wallStroke.current=null;setWallPreview([])}
     reset()
   }
   const move=(e:PointerEvent<SVGSVGElement>)=>{
     if(!pointers.current.has(e.pointerId)||!gesture.current)return
     pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    if(wallDraft!==null&&pointers.current.size===1&&wallStroke.current?.pointerId===e.pointerId){
+      const stroke=wallStroke.current
+      if(Math.hypot(e.clientX-stroke.lastScreen.x,e.clientY-stroke.lastScreen.y)>8&&stroke.points.length<WALL_MAX_POINTS){
+        const matrix=svg.current?.getScreenCTM()
+        if(matrix){
+          const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse())
+          stroke.points.push({x:p.x,y:p.y})
+          stroke.lastScreen={x:e.clientX,y:e.clientY}
+          setWallPreview([...stroke.points])
+        }
+      }
+      return
+    }
     const base=gesture.current,now=center()
     if(start.current&&Math.hypot(e.clientX-start.current.x,e.clientY-start.current.y)>7)moved.current=true
     if(!moved.current)return
@@ -250,6 +277,14 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
     liveBox.current=next;setManual(next)
   }
   const up=(e:PointerEvent<SVGSVGElement>)=>{
+    if(wallDraft!==null&&wallStroke.current?.pointerId===e.pointerId){
+      const stroke=wallStroke.current
+      const canCommit=e.type==='pointerup'&&pointers.current.size===1
+      wallStroke.current=null;setWallPreview([])
+      pointers.current.delete(e.pointerId)
+      if(canCommit)onWallStroke(stroke.points)
+      reset();return
+    }
     pointers.current.delete(e.pointerId)
     if(e.type==='pointercancel'||e.type==='lostpointercapture'){start.current=null;liveDrag.current=null;setDrag(null);liveNoteDrag.current=null;setNoteDrag(null);moved.current=true}
     else if(!pointers.current.size){
@@ -260,6 +295,7 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
         if(matrix){const anchor=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());onPickNoteTarget({x:Math.max(-10000,Math.min(10000,anchor.x)),y:Math.max(-10000,Math.min(10000,anchor.y))})}
       }
       else if(!moved.current&&start.current?.noteId){onSelectCanvasNote(start.current.noteId)}
+      else if(!moved.current&&start.current?.wallId){onSelectWall(start.current.wallId)}
       else if(!moved.current&&start.current?.partId){
         setManual(liveBox.current)
         if(start.current.handle||moving===start.current.partId){/* Move mode owns the whole selected Part, including edges. */}
@@ -282,9 +318,20 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
     }
     reset()
   }
-  return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving} data-direct={!!directMode} data-painting={!!paintTreatment} data-note-placement={notePlacement}>
+  return <div className="sm-canvas-shell" ref={shell} data-moving={!!moving} data-direct={!!directMode} data-painting={!!paintTreatment} data-note-placement={notePlacement} data-wall-drawing={wallDraft!==null}>
     {toolbar?<div className="sm-canvas-commandbar">{toolbar}</div>:null}
     <svg ref={svg} className="sm-canvas" aria-label={'Project measurement canvas · active room '+area.name} role="group" viewBox={box.x+' '+box.y+' '+box.width+' '+box.height} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={e=>{if(pointers.current.has(e.pointerId))up(e)}}>
+      {wallSketches.map(w=><g key={w.id} data-wall-sketch={w.id} className="sm-wall-sketch" data-selected={w.id===selectedWallId}>
+        <path className="sm-wall-path" d={wallPath(w.points)}/>
+        <path className="sm-wall-hit" d={wallPath(w.points)} role="button" tabIndex={0} aria-label={'Select schematic wall '+w.name}
+          onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();onSelectWall(w.id)}}}/>
+        <text x={w.points[0].x+8} y={w.points[0].y-12} className="sm-wall-caption">{w.name} · schematic</text>
+      </g>)}
+      {wallDraft!==null?<g className="sm-wall-preview" pointerEvents="none">
+        {wallDraft.length>0?<path d={wallPath([...wallDraft,...wallPreview])}/>:null}
+        {wallDraft.length===0&&wallPreview.length>0?<path d={wallPath(wallPreview)}/>:null}
+        {wallDraft.length>0?<circle cx={wallDraft[wallDraft.length-1].x} cy={wallDraft[wallDraft.length-1].y} r="6"/>:null}
+      </g>:null}
       {layout.map(item=>{
         const {shape,points,local}=item,position=drag?.id===shape.id?drag.position:{x:item.x,y:item.y},g=calculate(shape)
         const sign=polygonArea(points)>0?1:-1
@@ -368,10 +415,11 @@ export default function MeasureCanvas({ area, areas, canvasNotes, notePlacement 
       })}
     </svg>
     {paintToolbar}
+    {wallEditor?<div className="sm-wall-editor-slot">{wallEditor}</div>:null}
     {notePlacement?<div className="sm-note-placement" role="status">Tap the drawing to point your note here · <button type="button" onClick={onCancelNotePlacement}>Cancel</button></div>:null}
     {noteEditor?<div className="sm-note-editor-slot">{noteEditor}</div>:null}
     {floatingEditor&&(selectedEdge||selectedReference)&&editorAnchor?<div className="sm-canvas-floating" style={{left:editorAnchor.x,top:editorAnchor.y}}>{floatingEditor}</div>:null}
-    {!layout.length&&!canvasNotes.length&&!notePlacement?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
+    {!layout.length&&!canvasNotes.length&&!wallSketches.length&&!notePlacement&&wallDraft===null?<div className="sm-empty"><h2>Add the first part</h2><p>Choose Rectangle or L-shape, then tap the edge you measured.</p></div>:null}
     <p className="sm-canvas-hint">{moving?'Move selected part · tap Done moving to measure edges':'Tap edge to measure · tap part then drag inside it to move · blank space pans · two fingers zoom'}</p>
   </div>
 }

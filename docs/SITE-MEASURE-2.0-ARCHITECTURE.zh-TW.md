@@ -97,3 +97,17 @@
 - 渲染 preview 最多四行，英中混合文字按近似字寬換行；編輯器保留所有原始內容。Note 是示意註記，不是測量幾何。
 - **P5.1 範圍限制**：Canvas Note 不包含在 PDF／DXF 匯出中。PDF Export 面板明確提示這點。P5.3 需將這些備註列入 Field Report，並規劃圖面 Overview／Leader Line。現階段對外傳遞 Notes 請下載 Project JSON Backup，或在已支援的 Part/Edge Notes 裡記錄重要文字。
 - 舊專案的尺寸、Overhang、Sink、Edge Treatments、PDF/DXF 幾何不因新增或移動 Canvas Note 而改動。目標是比紙筆快，尚不新增任意 CAD 製造幾何或複雜 Room 系統。
+
+## P5.1.1 · Leader Line 直接點選（2026-11-08）
+
+- 橙色 Note 引線使用透明、44px 非縮放 stroke hit zone；點擊線段可直接編輯 Note，滑動線段仍平移畫布，不拖動 Note 卡片。
+- 鍵盤 Enter / Space 可由引線進入編輯。只有在卡片內拖曳才更改卡片位置，目標 pin 保持原位。新增手機觸控與拖曳回歸測試；與既有 Edge 命中範圍區隔。
+
+## P5.2.1 · Schematic Wall Sketch（2026-11-08）
+
+- 入口：`＋` → `＋ Wall sketch · schematic`；按畫布加入折線節點，或單指／手寫筆拖曳作自由線。兩指仍可作視角手勢，單指畫線模式不把手勢當實測距離。
+- 使用獨立 `Project.wallSketches[]`；每條 wall 最多 120 個節點、工程最多 50 條；schema v2 可選欄位相容舊工程。每條 `kind:'schematic'`，必須至少兩個不同的點，僅限非製造用的畫布世界座標。
+- 進行中可 Undo point、Cancel、Finish wall；完成後可選取並刪除，亦可用工程 Undo 還原。資料支持 IndexedDB／JSON Backup 與重新開啟。
+- 所有 Wall Sketch 視覺線條明顯採用與 CNC 輪廓不同的橙棕色虛線；不是牆尺寸比例、不是實測輪廓，不參與 cabinet、overhang、PDF 測量表、DXF。
+- PDF Export 面板提示：Canvas Notes 和 Wall Sketch 在 Project Backup 保存，**尚未在 PDF 中**。下一階段 P5.2.2 應在 Wall 上選點記錄「實測偏移值 + 基準邊 + 確認狀態」，不可從自由畫線推出尺寸；P5.3 合併 Field Report。
+- P5.2.1 完成手機觸控／桌面畫筆模擬回歸以及幾何隔離測試後，仍需現場 iPhone／Android 平板真機驗收；不動正式 `main`。
