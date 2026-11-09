@@ -55,7 +55,7 @@ html[data-theme="dark"] .button-primary { color: #1e1e1d; }
 .home-hero .home-hero-description { max-width: 410px; margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.85; }
 .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 19px 27px; margin-top: 39px; }
 .hero-actions .button-primary { min-height: 52px; padding: 14px 22px; }
-.hero-actions .button-primary span { font-size: 1.15rem; line-height: 1; }
+.hero-actions .button-primary .hero-action-icon { display: block; width: 17px; height: 17px; flex: none; }
 .home-quiet-link { display: inline-flex; align-items: center; gap: 12px; min-height: 48px; font-size: .8rem; font-weight: 650; letter-spacing: .055em; text-decoration: none; }
 .home-quiet-link:hover { color: var(--accent); }
 .home-hero-footnote { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 74px; color: #928a80; font-size: .6rem; letter-spacing: .16em; }

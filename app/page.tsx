@@ -30,7 +30,7 @@ export default function Home() {
             <h1 id="hero-heading">Precision.<br /><em>Imagination.</em><br />Made real.</h1>
             <p className="home-hero-description">At the intersection of design, engineering and intelligent tools — a place to turn considered ideas into useful things.</p>
             <div className="hero-actions">
-              <Link href="/projects" className="button-primary">Explore the studio <span aria-hidden="true">↗</span></Link>
+              <Link href="/projects" className="button-primary">Explore the studio <svg className="hero-action-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19 19 5M8 5h11v11" /></svg></Link>
               <Link href="/tools" className="home-quiet-link">Discover the tools <span aria-hidden="true">→</span></Link>
             </div>
             <div className="home-hero-footnote"><span>AI / DESIGN / ENGINEERING</span><span>EST. IN CURIOSITY</span></div>
