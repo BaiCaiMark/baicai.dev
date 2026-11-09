@@ -59,10 +59,6 @@ html[data-theme="dark"] .button-primary { color: #1e1e1d; }
 .home-quiet-link { display: inline-flex; align-items: center; gap: 12px; min-height: 48px; font-size: .8rem; font-weight: 650; letter-spacing: .055em; text-decoration: none; }
 .home-quiet-link:hover { color: var(--accent); }
 .home-hero-footnote { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 74px; color: #928a80; font-size: .6rem; letter-spacing: .16em; }
-.marble-stage { position: relative; display: grid; align-items: center; justify-items: center; align-self: center; overflow: hidden; margin: 0; min-height: 570px; border: 1px solid #f0ede7; background: #fff; isolation: isolate; }
-.marble-stage::before { position: absolute; inset: 0; z-index: -1; border-radius: 0; background: radial-gradient(ellipse at 50% 44%, #ffffff 22%, #faf9f7 90%); content: ""; }
-.marble-stage .marble-sculpture { width: min(100%, 560px); height: auto; object-fit: contain; transform: scale(1.01); }
-.marble-stage-caption { position: absolute; right: 22px; bottom: 20px; left: 22px; display: flex; justify-content: space-between; gap: 12px; color: #8e877e; font-size: .59rem; font-weight: 600; letter-spacing: .155em; }
 .home-manifesto { display: grid; grid-template-columns: 220px minmax(0, 1fr) 80px; align-items: center; gap: 32px; padding-block: 61px; border-bottom: 1px solid var(--border); }
 .manifesto-index { align-self: start; padding-top: 9px; color: var(--accent); font-size: .68rem; letter-spacing: .16em; }
 .home-manifesto p { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: clamp(1.65rem, 3vw, 2.6rem); font-weight: 500; letter-spacing: -.016em; line-height: 1.2; }
@@ -95,13 +91,10 @@ html[data-theme="dark"] .button-primary { color: #1e1e1d; }
 .footer-inner { padding-block: 30px; }
 @media (max-width: 1100px) {
   .home-hero-grid { gap: 24px; min-height: 565px; }
-  .marble-stage { min-height: 480px; }
   .home-hero .hero-copy h1 { font-size: clamp(4rem, 6.3vw, 6.6rem); }
 }
 @media (max-width: 900px) {
   .home-hero-grid { grid-template-columns: 1fr; padding-top: 28px; padding-bottom: 44px; gap: 0; }
-  .marble-stage { order: -1; min-height: auto; max-width: 620px; width: 100%; margin: 0 auto; aspect-ratio: 1.15; }
-  .marble-stage .marble-sculpture { max-height: 100%; width: auto; }
   .home-hero .hero-copy { padding: 36px 8px 18px; }
   .home-hero .hero-copy h1 { margin: 21px 0; font-size: clamp(4.3rem, 8vw, 6.5rem); }
   .home-hero-footnote { margin-top: 38px; }
@@ -113,8 +106,6 @@ html[data-theme="dark"] .button-primary { color: #1e1e1d; }
   .brand-logo .brand-mark-small { width: 34px; height: 34px; }
   .brand-logo-text { font-size: 1.15rem; }
   .home-hero-grid { padding-top: 14px; padding-bottom: 32px; }
-  .marble-stage { aspect-ratio: 1.09; border: 0; }
-  .marble-stage-caption { right: 12px; bottom: 10px; left: 12px; font-size: .52rem; }
   .home-hero .hero-copy { padding: 30px 4px 10px; }
   .home-kicker { font-size: .58rem; letter-spacing: .13em; }
   .home-kicker span { width: 15px; }
@@ -133,7 +124,6 @@ html[data-theme="dark"] .button-primary { color: #1e1e1d; }
   .home-section { padding-top: 70px; }
 }
 @media (max-width: 480px) {
-  .marble-stage { aspect-ratio: 1.05; }
   .home-hero .hero-copy h1 { font-size: clamp(3.45rem, 11.5vw, 4rem); }
   .home-hero-footnote { gap: 12px; }
   .closing-statement { margin-top: 68px; }

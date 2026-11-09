@@ -1,5 +1,6 @@
 import './globals.css'
 import './brand-refresh.css'
+import './hero-ambient.css'
 import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 import type { Metadata, Viewport } from 'next'

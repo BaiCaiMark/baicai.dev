@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import PortalCard from './components/PortalCard'
 import ProjectCard from './components/ProjectCard'
@@ -18,7 +17,13 @@ const portals = [
 export default function Home() {
   return (
     <div className="home-page">
-      <section className="home-hero" aria-labelledby="hero-heading">
+      <section className="home-hero home-hero--ambient" aria-labelledby="hero-heading">
+        <div className="home-hero-atmosphere" aria-hidden="true">
+          <span className="atmosphere-form" />
+          <span className="atmosphere-light" />
+          <span className="atmosphere-line atmosphere-line--one" />
+          <span className="atmosphere-line atmosphere-line--two" />
+        </div>
         <div className="site-container home-hero-grid">
           <div className="hero-copy">
             <p className="home-kicker"><span aria-hidden="true" /> Independent creative technology studio</p>
@@ -30,18 +35,6 @@ export default function Home() {
             </div>
             <div className="home-hero-footnote"><span>AI / DESIGN / ENGINEERING</span><span>EST. IN CURIOSITY</span></div>
           </div>
-          <figure className="hero-art marble-stage">
-            <Image
-              src="/brand/identity-2026/marble-sculpture-concept-v1.webp"
-              alt="White marble sculptural triangular loop with natural grey veining and delicate gold details. An evolving brand art study."
-              width={1024}
-              height={1024}
-              priority
-              sizes="(max-width: 900px) 100vw, 48vw"
-              className="marble-sculpture"
-            />
-            <figcaption className="marble-stage-caption"><span>01 / FORM STUDY</span><span>AN EVOLVING SCULPTURE</span></figcaption>
-          </figure>
         </div>
       </section>
 
