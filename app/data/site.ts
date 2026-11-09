@@ -1,10 +1,10 @@
 export const site = {
   name: 'baicai.dev',
   url: 'https://baicai.dev',
-  description: 'A bright, quiet corner for practical tools, notes, projects, and the ideas I want to keep.',
+  description: 'An independent creative technology studio at the intersection of design, engineering, AI, and practical software.',
   email: 'baicai.exe@gmail.com',
   github: 'https://github.com/BaiCaiMark/baicai.dev',
-  logo: '/theme/logo/eclipse-ring-mark-transparent-1024.png',
+  logo: '/brand/identity-2026/solid-form-mark.webp',
   shareImage: '/opengraph-image',
 } as const
 

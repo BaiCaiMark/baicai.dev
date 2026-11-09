@@ -1,4 +1,5 @@
 import './globals.css'
+import './brand-refresh.css'
 import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 import type { Metadata, Viewport } from 'next'
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#F7F8F6',
+  themeColor: '#F8F6F2',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
