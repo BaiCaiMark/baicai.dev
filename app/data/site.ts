@@ -1,5 +1,6 @@
 export const site = {
   name: 'baicai.dev',
+  brandName: 'baicai',
   url: 'https://baicai.dev',
   description: 'An independent creative technology studio at the intersection of design, engineering, AI, and practical software.',
   email: 'baicai.exe@gmail.com',
