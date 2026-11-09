@@ -1,0 +1,175 @@
+/* Hero concept V2: the brand form is an atmospheric element, never a sculpture.
+   CSS-only light and line work; logo silhouette is referenced, not redrawn. */
+.home-hero--ambient {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 86% 48%, rgb(222 209 190 / 49%), transparent 48%),
+    radial-gradient(ellipse at 64% 5%, rgb(255 255 255 / 88%), transparent 52%),
+    linear-gradient(115deg, #fbf9f5 3%, #f8f6f2 40%, #f3f0ea 100%);
+}
+.home-hero-atmosphere {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.atmosphere-form {
+  position: absolute;
+  top: 50%;
+  right: -7%;
+  width: min(77vw, 985px);
+  aspect-ratio: 1;
+  transform: translateY(-50%) rotate(-8deg);
+  background: url('/brand/identity-2026/solid-form-mark.webp') center / contain no-repeat;
+  opacity: .095;
+  filter: grayscale(1) sepia(.22);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 28%, black 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, black 28%, black 100%);
+}
+.atmosphere-light {
+  position: absolute;
+  top: -30%;
+  right: -17%;
+  width: min(85vw, 1050px);
+  height: 165%;
+  transform: rotate(-18deg);
+  background: linear-gradient(92deg, transparent 27%, rgb(255 255 255 / 65%) 49%, transparent 65%);
+  filter: blur(36px);
+  opacity: .72;
+}
+.atmosphere-line {
+  position: absolute;
+  width: min(86vw, 1150px);
+  aspect-ratio: 1;
+  border: 1px solid rgb(151 131 105 / 13%);
+  border-radius: 50%;
+}
+.atmosphere-line--one {
+  top: -88%;
+  right: -19%;
+}
+.atmosphere-line--two {
+  bottom: -127%;
+  right: 16%;
+  border-color: rgb(171 143 103 / 10%);
+}
+.home-hero--ambient .home-hero-grid {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-height: clamp(625px, 52vw, 760px);
+  padding-block: 76px 82px;
+}
+.home-hero--ambient .hero-copy {
+  flex: 0 1 655px;
+  padding: 25px 0;
+}
+.home-hero--ambient .hero-copy h1 {
+  max-width: 640px;
+  font-size: clamp(4.8rem, 7.5vw, 7.45rem);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 35%);
+}
+.home-hero--ambient .home-hero-description {
+  max-width: 440px;
+}
+.home-hero--ambient .home-hero-footnote {
+  margin-top: 78px;
+}
+html[data-theme="dark"] .home-hero--ambient {
+  background:
+    radial-gradient(ellipse at 88% 50%, rgb(125 98 70 / 22%), transparent 50%),
+    radial-gradient(ellipse at 70% 4%, rgb(91 84 76 / 16%), transparent 50%),
+    linear-gradient(115deg, #211f1d, #24221f);
+}
+html[data-theme="dark"] .atmosphere-form {
+  opacity: .13;
+  filter: grayscale(1) invert(1);
+}
+html[data-theme="dark"] .atmosphere-light {
+  opacity: .08;
+}
+html[data-theme="dark"] .atmosphere-line {
+  border-color: rgb(206 187 161 / 15%);
+}
+html[data-theme="dark"] .home-hero--ambient .hero-copy h1 {
+  text-shadow: none;
+}
+@media (max-width: 900px) {
+  .home-hero--ambient .home-hero-grid {
+    min-height: 660px;
+    padding-block: 70px 74px;
+  }
+  .home-hero--ambient .hero-copy {
+    flex: 0 1 640px;
+    padding: 0 8px;
+  }
+  .atmosphere-form {
+    right: -36%;
+    width: min(100vw, 760px);
+    opacity: .065;
+    -webkit-mask-image: linear-gradient(90deg, transparent, black 52%);
+    mask-image: linear-gradient(90deg, transparent, black 52%);
+  }
+  .atmosphere-line--one {
+    top: -40%;
+    right: -64%;
+  }
+}
+@media (max-width: 767px) {
+  .home-hero--ambient .home-hero-grid {
+    min-height: min(740px, calc(100svh - 70px));
+    min-height: clamp(600px, calc(100svh - 70px), 740px);
+    padding-block: 56px 64px;
+  }
+  .home-hero--ambient .hero-copy {
+    padding: 0 4px;
+  }
+  .home-hero--ambient .hero-copy h1 {
+    font-size: clamp(3.6rem, 11.2vw, 5.55rem);
+    margin-block: 26px;
+  }
+  .home-hero--ambient .home-hero-footnote {
+    margin-top: 60px;
+  }
+  .atmosphere-form {
+    top: 42%;
+    right: -63%;
+    width: 130vw;
+    opacity: .065;
+    transform: translateY(-50%) rotate(-8deg);
+  }
+  .atmosphere-light {
+    top: -10%;
+    right: -80%;
+    width: 150vw;
+  }
+  .atmosphere-line--one {
+    top: -15%;
+    right: -130%;
+    width: 180vw;
+  }
+  .atmosphere-line--two {
+    bottom: -85%;
+    right: -95%;
+    width: 180vw;
+  }
+}
+@media (max-width: 480px) {
+  .home-hero--ambient .home-hero-grid {
+    min-height: clamp(570px, calc(100svh - 70px), 695px);
+  }
+  .home-hero--ambient .hero-copy h1 {
+    font-size: clamp(3.25rem, 11.5vw, 4.05rem);
+  }
+  .home-hero--ambient .home-hero-footnote {
+    margin-top: 50px;
+  }
+  .atmosphere-form {
+    right: -71%;
+    opacity: .055;
+  }
+}

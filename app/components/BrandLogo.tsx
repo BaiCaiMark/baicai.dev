@@ -11,7 +11,7 @@ export default function BrandLogo({ compact = false, className = '' }: BrandLogo
   return (
     <Link
       href="/"
-      aria-label="baicai.dev home"
+      aria-label="baicai home"
       className={`brand-logo no-underline ${className}`}
     >
       <Image
@@ -25,7 +25,7 @@ export default function BrandLogo({ compact = false, className = '' }: BrandLogo
       <Image src={site.logo} width={40} height={40} alt="" aria-hidden="true" className="brand-mark-small" />
       {!compact ? (
         <span className="brand-logo-text">
-          {site.name}
+          {site.brandName}
         </span>
       ) : null}
     </Link>

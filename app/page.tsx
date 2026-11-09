@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import PortalCard from './components/PortalCard'
 import ProjectCard from './components/ProjectCard'
@@ -6,48 +5,64 @@ import ToolCard from './components/ToolCard'
 import { activeTools, projects, recentNotes, site, formatNoteDate } from './data/site'
 import { pageMetadata } from './lib/metadata'
 
-export const metadata = pageMetadata(site.name, site.description, '/')
+export const metadata = pageMetadata('baicai.dev — Creative Technology Studio', site.description, '/')
 
 const portals = [
-  { href: '/tools', title: 'Toolbox', description: 'Small, practical tools built for real work and everyday use.', icon: 'tools', number: '01' },
-  { href: '/notes', title: 'Notes', description: 'Ideas, experiments, lessons, and things worth remembering.', icon: 'notes', number: '02' },
-  { href: '/projects', title: 'Projects', description: 'Things I am building, testing, improving, and learning from.', icon: 'projects', number: '03' },
-  { href: '/about', title: 'About', description: 'Work, technology, life, faith, and the person behind this space.', icon: 'about', number: '04' },
+  { href: '/tools', title: 'Tools', description: 'Practical software, shaped by the work it needs to do.', icon: 'tools', number: '01' },
+  { href: '/projects', title: 'Projects', description: 'Ideas in motion. Systems taking shape.', icon: 'projects', number: '02' },
+  { href: '/notes', title: 'Notes', description: 'Observations, experiments, and things worth keeping.', icon: 'notes', number: '03' },
+  { href: '/about', title: 'About', description: 'The person and practice behind baicai.dev.', icon: 'about', number: '04' },
 ] as const
 
 export default function Home() {
   return (
     <div className="home-page">
-      <section className="site-container hero" aria-labelledby="hero-heading">
-        <div className="hero-copy">
-          <p className="eyebrow">Mark · baicai.dev</p>
-          <h1 id="hero-heading">Think clearly.<br />Build useful things.</h1>
-          <p>A bright, quiet corner for practical tools, notes, projects, and the ideas I want to keep.</p>
-          <Link href="#explore" className="button-primary hero-action">Explore <Image src="/theme/icons/arrow-right.svg" width={18} height={18} alt="" aria-hidden="true" /></Link>
+      <section className="home-hero home-hero--ambient" aria-labelledby="hero-heading">
+        <div className="home-hero-atmosphere" aria-hidden="true">
+          <span className="atmosphere-form" />
+          <span className="atmosphere-light" />
+          <span className="atmosphere-line atmosphere-line--one" />
+          <span className="atmosphere-line atmosphere-line--two" />
         </div>
-        <div className="hero-art" aria-hidden="true"><Image src={site.logo} width={1024} height={1024} priority sizes="(max-width: 767px) 216px, (max-width: 900px) 324px, 465px" alt="" /></div>
+        <div className="site-container home-hero-grid">
+          <div className="hero-copy">
+            <p className="home-kicker"><span aria-hidden="true" /> Independent creative technology studio</p>
+            <h1 id="hero-heading">Precision.<br /><em>Imagination.</em><br />Made real.</h1>
+            <p className="home-hero-description">At the intersection of design, engineering and intelligent tools — a place to turn considered ideas into useful things.</p>
+            <div className="hero-actions">
+              <Link href="/projects" className="button-primary">Explore the studio <svg className="hero-action-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19 19 5M8 5h11v11" /></svg></Link>
+              <Link href="/tools" className="home-quiet-link">Discover the tools <span aria-hidden="true">→</span></Link>
+            </div>
+            <div className="home-hero-footnote"><span>AI / DESIGN / ENGINEERING</span><span>EST. IN CURIOSITY</span></div>
+          </div>
+        </div>
       </section>
 
-      <section id="explore" className="site-container portal-section" aria-label="Explore baicai.dev">
+      <div className="site-container">
+        <div className="home-manifesto"><span className="manifesto-index">A STUDIO IN PROGRESS</span><p>Built from real-world problems.<br /><i>Open to unexpected possibilities.</i></p><span className="manifesto-line" aria-hidden="true" /></div>
+      </div>
+
+      <section id="explore" className="site-container portal-section" aria-labelledby="explore-heading">
+        <div className="home-section-heading"><div><p className="eyebrow">The practice</p><h2 id="explore-heading">Explore the space<span className="heading-period">.</span></h2></div><p>Four ways into one evolving workshop.</p></div>
         <div className="portal-grid">{portals.map((portal) => <PortalCard key={portal.href} {...portal} />)}</div>
       </section>
 
-      <section className="site-container home-section" aria-labelledby="latest-notes">
-        <div className="section-header"><div><p className="eyebrow">Journal</p><h2 id="latest-notes" className="section-heading">Latest notes</h2></div><Link href="/notes" className="text-link">View all notes <span aria-hidden="true">→</span></Link></div>
-        <div className="latest-grid">
-          {recentNotes.slice(0, 3).map((note) => <article className="latest-card" key={note.slug}><div className="latest-art" aria-hidden="true"><span /><span /></div><div className="latest-body"><span className="category-label">Note</span><h3><Link href={`/notes#${note.slug}`}>{note.title}</Link></h3><p>{note.summary}</p><time dateTime={note.date}>{formatNoteDate(note.date)}</time></div></article>)}
-        </div>
-      </section>
-
       <section className="site-container home-section home-work" aria-labelledby="current-work">
-        <div className="section-header"><div><p className="eyebrow">In use</p><h2 id="current-work" className="section-heading">Current work</h2></div></div>
+        <div className="home-section-heading"><div><p className="eyebrow">Made to work</p><h2 id="current-work">Current explorations<span className="heading-period">.</span></h2></div><Link href="/projects" className="text-link">View all projects <span aria-hidden="true">↗</span></Link></div>
         <div className="home-work-grid">
           {activeTools.slice(0, 1).map((tool) => <ToolCard key={tool.slug} tool={tool} />)}
           {projects.slice(0, 1).map((project) => <ProjectCard key={project.name} project={project} />)}
         </div>
       </section>
 
-      <section className="site-container closing-statement" aria-label="Closing statement"><blockquote>Keep what matters.<br />Build what helps. Stay curious.</blockquote><div className="closing-signature"><span>Mark</span><span>baicai.dev</span></div></section>
+      <section className="site-container home-section" aria-labelledby="latest-notes">
+        <div className="home-section-heading"><div><p className="eyebrow">The journal</p><h2 id="latest-notes">Notes from the process<span className="heading-period">.</span></h2></div><Link href="/notes" className="text-link">Read the journal <span aria-hidden="true">↗</span></Link></div>
+        <div className="latest-grid">
+          {recentNotes.slice(0, 3).map((note) => <article className="latest-card" key={note.slug}><div className="latest-art" aria-hidden="true"><span /><span /></div><div className="latest-body"><span className="category-label">FIELD NOTES</span><h3><Link href={`/notes#${note.slug}`}>{note.title}</Link></h3><p>{note.summary}</p><time dateTime={note.date}>{formatNoteDate(note.date)}</time></div></article>)}
+        </div>
+      </section>
+
+      <section className="site-container closing-statement" aria-label="Closing statement"><blockquote>Keep what matters.<br /><i>Make what is possible.</i></blockquote><div className="closing-signature"><span>MADE WITH CURIOSITY</span><span>baicai.dev</span></div></section>
     </div>
   )
 }
