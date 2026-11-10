@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { site } from '../data/site'
 
@@ -14,15 +13,8 @@ export default function BrandLogo({ compact = false, className = '' }: BrandLogo
       aria-label="baicai home"
       className={`brand-logo no-underline ${className}`}
     >
-      <Image
-        src={site.logo}
-        width={40}
-        height={40}
-        alt=""
-        aria-hidden="true"
-        className="brand-mark-full"
-      />
-      <Image src={site.logo} width={40} height={40} alt="" aria-hidden="true" className="brand-mark-small" />
+      <span className="brand-mark-warm brand-mark-full" aria-hidden="true" />
+      <span className="brand-mark-warm brand-mark-small" aria-hidden="true" />
       {!compact ? (
         <span className="brand-logo-text">
           {site.brandName}
