@@ -173,3 +173,54 @@ html[data-theme="dark"] .home-hero--ambient .hero-copy h1 {
     opacity: .055;
   }
 }
+
+/* Scroll-responsive hero V1: dimensional movement without altering the approved
+   logo image or adding a heavyweight rendering engine. CSS variables are updated
+   only on scroll/resize; the layout and text never move. */
+.home-hero--scroll .atmosphere-form {
+  --hero-base-opacity: .095;
+  transform:
+    translate3d(var(--hero-drift-x, 0px), calc(-50% + var(--hero-drift-y, 0px)), 0)
+    perspective(1000px) rotateY(var(--hero-tilt, 0deg))
+    rotate(calc(-8deg + var(--hero-turn, 0deg)))
+    scale(var(--hero-scale, 1));
+  opacity: calc(var(--hero-base-opacity) * var(--hero-presence, 1));
+  backface-visibility: hidden;
+}
+.home-hero--scroll .atmosphere-light {
+  --hero-light-base-opacity: .72;
+  transform: translate3d(var(--hero-light-x, 0px), 0, 0) rotate(-18deg);
+  opacity: calc(var(--hero-light-base-opacity) * var(--hero-light-presence, 1));
+}
+.home-hero--scroll .atmosphere-line {
+  transform: translate3d(0, var(--hero-ring-y, 0px), 0);
+}
+html[data-theme="dark"] .home-hero--scroll .atmosphere-form {
+  --hero-base-opacity: .13;
+  opacity: calc(var(--hero-base-opacity) * var(--hero-presence, 1));
+}
+html[data-theme="dark"] .home-hero--scroll .atmosphere-light {
+  --hero-light-base-opacity: .08;
+  opacity: calc(var(--hero-light-base-opacity) * var(--hero-light-presence, 1));
+}
+@media (max-width: 900px) {
+  .home-hero--scroll .atmosphere-form { --hero-base-opacity: .065; }
+}
+@media (max-width: 767px) {
+  .home-hero--scroll .atmosphere-form { --hero-base-opacity: .065; }
+}
+@media (max-width: 480px) {
+  .home-hero--scroll .atmosphere-form { --hero-base-opacity: .055; }
+}
+/* Accessibility: respect OS reduced motion, even if it changes during a session. */
+@media (prefers-reduced-motion: reduce) {
+  .home-hero--scroll .atmosphere-form {
+    transform: translateY(-50%) rotate(-8deg);
+    opacity: var(--hero-base-opacity);
+  }
+  .home-hero--scroll .atmosphere-light {
+    transform: rotate(-18deg);
+    opacity: var(--hero-light-base-opacity);
+  }
+  .home-hero--scroll .atmosphere-line { transform: none; }
+}

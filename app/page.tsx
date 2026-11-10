@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import PortalCard from './components/PortalCard'
+import ScrollAtmosphere from './components/ScrollAtmosphere'
 import ProjectCard from './components/ProjectCard'
 import ToolCard from './components/ToolCard'
 import { activeTools, projects, recentNotes, site, formatNoteDate } from './data/site'
@@ -17,13 +18,8 @@ const portals = [
 export default function Home() {
   return (
     <div className="home-page">
-      <section className="home-hero home-hero--ambient" aria-labelledby="hero-heading">
-        <div className="home-hero-atmosphere" aria-hidden="true">
-          <span className="atmosphere-form" />
-          <span className="atmosphere-light" />
-          <span className="atmosphere-line atmosphere-line--one" />
-          <span className="atmosphere-line atmosphere-line--two" />
-        </div>
+      <section className="home-hero home-hero--ambient home-hero--scroll" aria-labelledby="hero-heading">
+        <ScrollAtmosphere />
         <div className="site-container home-hero-grid">
           <div className="hero-copy">
             <p className="home-kicker"><span aria-hidden="true" /> Independent creative technology studio</p>
