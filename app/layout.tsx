@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   title: { default: site.name, template: `%s | ${site.name}` },
   description: site.description,
   applicationName: site.name,
-  manifest: '/site.webmanifest?v=warm-v1',
+  manifest: '/site.webmanifest?v=warm-v2',
   icons: {
     icon: [
       { url: '/favicon-warm-v1-32.png', type: 'image/png', sizes: '32x32' },
