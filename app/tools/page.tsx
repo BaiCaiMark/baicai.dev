@@ -4,13 +4,13 @@ import ToolCard from '../components/ToolCard'
 import { tools, toolCategories } from '../data/site'
 import { pageMetadata } from '../lib/metadata'
 
-export const metadata = pageMetadata('Tools', 'Practical browser tools for work and everyday tasks, including the A5 Bridge Saw Converter.', '/tools')
+export const metadata = pageMetadata('Tools', 'Browser tools for site measurements, DXF/DWG/PDF drawing review, and workshop conversions.', '/tools')
 
 export default function ToolsPage() {
   return (
     <section className="page-section">
       <div className="site-container">
-        <PageHeader eyebrow="The toolbox" title="Tools" description="Practical helpers for the tasks I return to." />
+        <PageHeader eyebrow="The toolbox" title="Tools" description="Small browser tools built around real tasks: measuring a job, reviewing a drawing, or converting a workshop dimension." />
         {toolCategories.map((category) => {
           const categoryTools = tools.filter((tool) => tool.category === category)
           if (!categoryTools.length) return null
@@ -24,8 +24,8 @@ export default function ToolsPage() {
           )
         })}
         <aside className="quiet-note">
-          <h2>More everyday tools</h2>
-          <p>The next addition starts with a task worth making simpler.</p>
+          <h2>Built for practical use</h2>
+          <p>These helpers are designed to support, not replace, field verification and shop-floor checks. Review measurements and machining values before fabrication.</p>
         </aside>
       </div>
     </section>
