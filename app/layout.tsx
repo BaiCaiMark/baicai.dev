@@ -15,14 +15,14 @@ export const metadata: Metadata = {
   title: { default: site.name, template: `%s | ${site.name}` },
   description: site.description,
   applicationName: site.name,
-  manifest: '/site.webmanifest',
+  manifest: '/site.webmanifest?v=warm-v1',
   icons: {
     icon: [
-      { url: '/favicon-32.png', type: 'image/png', sizes: '32x32' },
-      { url: '/favicon-16.png', type: 'image/png', sizes: '16x16' },
+      { url: '/favicon-warm-v1-32.png', type: 'image/png', sizes: '32x32' },
+      { url: '/favicon-warm-v1-16.png', type: 'image/png', sizes: '16x16' },
     ],
-    shortcut: ['/favicon.ico'],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
+    shortcut: ['/favicon-warm-v1.ico'],
+    apple: [{ url: '/apple-touch-icon-warm-v1.png', sizes: '180x180' }],
   },
   robots: { index: true, follow: true },
 }
