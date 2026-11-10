@@ -11,7 +11,7 @@ const portals = [
   { href: '/tools', title: 'Tools', description: 'Practical software, shaped by the work it needs to do.', icon: 'tools', number: '01' },
   { href: '/projects', title: 'Projects', description: 'Ideas in motion. Systems taking shape.', icon: 'projects', number: '02' },
   { href: '/notes', title: 'Notes', description: 'Observations, experiments, and things worth keeping.', icon: 'notes', number: '03' },
-  { href: '/about', title: 'About', description: 'The person and practice behind baicai.dev.', icon: 'about', number: '04' },
+  { href: '/about', title: 'About', description: 'The hands-on experience and curiosity behind baicai.', icon: 'about', number: '04' },
 ] as const
 
 export default function Home() {
@@ -28,7 +28,7 @@ export default function Home() {
           <div className="hero-copy">
             <p className="home-kicker"><span aria-hidden="true" /> Independent creative technology studio</p>
             <h1 id="hero-heading">Precision.<br /><em>Imagination.</em><br />Made real.</h1>
-            <p className="home-hero-description">At the intersection of design, engineering and intelligent tools — a place to turn considered ideas into useful things.</p>
+            <p className="home-hero-description">Software shaped by stone fabrication, field measurements and a curiosity for AI — built for real work, and refined through use.</p>
             <div className="hero-actions">
               <Link href="/projects" className="button-primary">Explore the studio <svg className="hero-action-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19 19 5M8 5h11v11" /></svg></Link>
               <Link href="/tools" className="home-quiet-link">Discover the tools <span aria-hidden="true">→</span></Link>
@@ -50,8 +50,8 @@ export default function Home() {
       <section className="site-container home-section home-work" aria-labelledby="current-work">
         <div className="home-section-heading"><div><p className="eyebrow">Made to work</p><h2 id="current-work">Current explorations<span className="heading-period">.</span></h2></div><Link href="/projects" className="text-link">View all projects <span aria-hidden="true">↗</span></Link></div>
         <div className="home-work-grid">
-          {activeTools.slice(0, 1).map((tool) => <ToolCard key={tool.slug} tool={tool} />)}
-          {projects.slice(0, 1).map((project) => <ProjectCard key={project.name} project={project} />)}
+          {activeTools.filter((tool) => tool.slug === 'site-measure' || tool.slug === 'cad-viewer').map((tool) => <ToolCard key={tool.slug} tool={tool} />)}
+          {projects.filter((project) => project.slug === 'zolith-studio' || project.slug === 'true-form-studio').map((project) => <ProjectCard key={project.name} project={project} />)}
         </div>
       </section>
 
