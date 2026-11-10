@@ -60,7 +60,8 @@ html[data-theme="dark"] .brand-mark-warm {
 }
 html[data-theme="dark"] .brand-mark-warm::after { opacity: .3; }
 
-.brand-logo-text { font-family: var(--font-ui), Inter, sans-serif; font-size: 1.43rem; font-weight: 650; letter-spacing: -.065em; line-height: 1; }
+.brand-logo-text { color: #54473d; font-family: var(--font-ui), Inter, sans-serif; font-size: 1.43rem; font-weight: 650; letter-spacing: -.065em; line-height: 1; }
+html[data-theme="dark"] .brand-logo-text { color: #e6d4b9; }
 .nav-link { font-size: .83rem; letter-spacing: .035em; }
 .icon-button:hover { background: var(--surface-soft); }
 html[data-theme="dark"] .brand-logo img, html[data-theme="dark"] .about-avatar { filter: invert(1); }
