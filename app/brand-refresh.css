@@ -34,6 +34,32 @@ html[data-theme="dark"] {
 .header-inner { min-height: 78px; }
 .brand-logo { gap: 12px; }
 .brand-logo .brand-mark-full { width: 40px; height: 40px; object-fit: contain; }
+/* Warm logo micro-study: preserve the exact published silhouette via the source image alpha.
+   Layered gold/taupe gradient is an optical color treatment, not new geometry. */
+.brand-mark-warm {
+  position: relative;
+  display: block;
+  flex: none;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: linear-gradient(122deg, #ccb18c 5%, #a1876d 25%, #605750 51%, #77685a 68%, #c2a17e 94%);
+  -webkit-mask: url('/brand/identity-2026/solid-form-mark.webp') center / contain no-repeat;
+  mask: url('/brand/identity-2026/solid-form-mark.webp') center / contain no-repeat;
+}
+/* Source highlights retain their original size and position. */
+.brand-mark-warm::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('/brand/identity-2026/solid-form-mark.webp') center / contain no-repeat;
+  mix-blend-mode: screen;
+  opacity: .55;
+}
+html[data-theme="dark"] .brand-mark-warm {
+  background: linear-gradient(122deg, #e9d2ac 5%, #b99c79 45%, #cbb08b 69%, #f1d7af 94%);
+}
+html[data-theme="dark"] .brand-mark-warm::after { opacity: .3; }
+
 .brand-logo-text { font-family: var(--font-ui), Inter, sans-serif; font-size: 1.43rem; font-weight: 650; letter-spacing: -.065em; line-height: 1; }
 .nav-link { font-size: .83rem; letter-spacing: .035em; }
 .icon-button:hover { background: var(--surface-soft); }
