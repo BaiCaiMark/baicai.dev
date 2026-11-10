@@ -2,8 +2,8 @@
   "name": "baicai.dev — Creative Technology Studio",
   "short_name": "baicai.dev",
   "icons": [
-    { "src": "/pwa-warm-v1-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/pwa-warm-v1-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/pwa-warm-v2-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa-warm-v2-512.png", "sizes": "512x512", "type": "image/png" }
   ],
   "theme_color": "#F8F6F2",
   "background_color": "#F8F6F2",
