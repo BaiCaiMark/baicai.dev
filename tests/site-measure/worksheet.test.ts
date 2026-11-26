@@ -27,7 +27,7 @@ test('independent summed field reading is not a geometry constraint',()=>{
   assert.ok(Math.abs(parseFieldMeasurement(r.measurement).total!-38.25*25.4)<1e-6)
   r.measurement=quantity('200 + 1 9/16')
   assert.deepEqual(calculate(s).top,before)
-  assert.match(fieldMeasurementText(r.measurement,'in'),/201.5625/)
+  assert.match(fieldMeasurementText(r.measurement,'in'),/201 9\/16/)
 })
 test('bad field expressions stay unknown without changing geometry',()=>{
   for(const input of ['','12 +','12 - 3','1 + -2','1/0','1e3','12 + window.alert(1)'])assert.equal(parseFieldMeasurement(quantity(input)).total,null)
@@ -66,7 +66,7 @@ test('existing IndexedDB v1 record opens and upgrades only on an atomic save',as
 })
 test('reference readings and edge notes survive PDF/DXF model and project round trip',()=>{
   const p=worksheetSample(),copy=projectSchema.parse(JSON.parse(JSON.stringify(p))),shot=exportSnapshot(copy)
-  assert.match(shot.entries[0].rows.map(r=>r.text).join(),/38\.25/)
+  assert.match(shot.entries[0].rows.map(r=>r.text).join(),/38 1\/4/)
   assert.match(shot.entries[0].rows.map(r=>r.text).join(),/Wall may be curved/)
   assert.match(createDxf(shot).text,/Cabinet check/)
   const font=new Uint8Array(fs.readFileSync('public/fonts/site-measure/NotoSansTC-Regular.ttf'))

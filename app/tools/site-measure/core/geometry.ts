@@ -159,14 +159,14 @@ export function referenceGeometry(ref: Reference, shape: Shape, geometry: Geomet
   return { lines, point, warnings }
 }
 export type ReportRow = { label: string; text: string }
-export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(shape)): ReportRow[] {
+export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(shape), display = formatLength): ReportRow[] {
   const rows: ReportRow[] = requiredParams(shape).map(key => {
     const q = shape.dimensions[key]
-    return { label: (shape.basis === 'cabinet' ? 'Cabinet ' : 'Countertop directly measured ') + paramLabels[key], text: formatLength(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] }
+    return { label: (shape.basis === 'cabinet' ? 'Cabinet ' : 'Countertop directly measured ') + paramLabels[key], text: display(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] }
   })
   for (const key of requiredParams(shape)) {
     const q = shape.alternateDimensions[key]
-    if (q.input.trim()) rows.push({ label: 'Retained alternate ' + (shape.basis === 'cabinet' ? 'finished reading ' : 'cabinet ') + paramLabels[key], text: formatLength(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] })
+    if (q.input.trim()) rows.push({ label: 'Retained alternate ' + (shape.basis === 'cabinet' ? 'finished reading ' : 'cabinet ') + paramLabels[key], text: display(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] })
   }
   for (const e of edgeOrder(shape)) {
     const treatment = treatmentOf(shape,e)
@@ -175,13 +175,13 @@ export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(s
   if (shape.basis === 'cabinet') {
     for (const e of edgeOrder(shape)) {
       const q = shape.allowances[e]
-      rows.push({ label: 'Overhang ' + edgeLabels[e], text: formatLength(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] + (q.defaultRevision === undefined ? '' : ' · preset v' + q.defaultRevision) })
+      rows.push({ label: 'Overhang ' + edgeLabels[e], text: display(value(q), unit) + ' · ' + originLabels[q.origin] + ' / ' + statusLabels[q.status] + (q.defaultRevision === undefined ? '' : ' · preset v' + q.defaultRevision) })
     }
     if (shape.template === 'rectangle') {
       const result = (key: 'width' | 'height', a: Edge, b: Edge) => {
         const values = [value(shape.allowances[a]), value(shape.dimensions[key]), value(shape.allowances[b])]
-        if(values.some(n=>n===null))return values.map(n=>formatLength(n,unit)).join(' + ')+' = Incomplete'
-        return values.filter((n,i)=>i===1||n!==0).map(n=>formatLength(n,unit)).join(' + ') + ' = ' + formatLength(values.reduce<number>((s,n)=>s+n!,0),unit)
+        if(values.some(n=>n===null))return values.map(n=>display(n,unit)).join(' + ')+' = Incomplete'
+        return values.filter((n,i)=>i===1||n!==0).map(n=>display(n,unit)).join(' + ') + ' = ' + display(values.reduce<number>((s,n)=>s+n!,0),unit)
       }
       rows.push({ label: 'Finished length = Left + Cabinet + Right (calculated)', text: result('width', 'left', 'right') })
       rows.push({ label: 'Finished depth = Back + Cabinet + Front (calculated)', text: result('height', 'back', 'front') })
@@ -189,22 +189,22 @@ export function measurementRows(shape: Shape, unit: Unit, geometry = calculate(s
   }
   if (geometry.top) {
     const bb = bounds(geometry.top)
-    rows.push({ label: shape.basis === 'cabinet' ? 'Countertop finished size (calculated)' : 'Countertop finished size (directly measured)', text: formatLength(bb.width, unit) + ' × ' + formatLength(bb.height, unit) })
+    rows.push({ label: shape.basis === 'cabinet' ? 'Countertop finished size (calculated)' : 'Countertop finished size (directly measured)', text: display(bb.width, unit) + ' × ' + display(bb.height, unit) })
     if (shape.template === 'l') edgeOrder(shape).forEach((e, i) => {
       const a = geometry.top![i], b = geometry.top![(i + 1) % geometry.top!.length]
-      rows.push({ label: 'Finished ' + edgeLabels[e], text: formatLength(Math.hypot(b.x - a.x, b.y - a.y), unit) + ' · calculated edge length' })
+      rows.push({ label: 'Finished ' + edgeLabels[e], text: display(Math.hypot(b.x - a.x, b.y - a.y), unit) + ' · calculated edge length' })
     })
   }
   rows.push({ label: 'Template orientation & reference axes', text: 'Rotation ' + shape.rotation + '° / Mirror ' + (shape.mirrored ? 'Yes' : 'No') + '; original template X left→right, Y back→front; axes follow the drawing' })
   for (const ref of shape.references) {
     const label = ref.kind === 'sink' ? 'Sink '+(shape.references.filter(r=>r.kind==='sink').findIndex(r=>r.id===ref.id)+1)+' Center' : 'Cooktop'
-    rows.push({ label: label + ' · ' + (ref.basis === 'cabinet' ? 'Cabinet edges' : 'Countertop edges'), text: 'X ' + (ref.fromX === 'left' ? 'from left' : 'from right') + ' ' + formatLength(value(ref.x), unit) + (ref.kind === 'sink' && !ref.y.input.trim() ? ' (X only; not a cutout)' : ' / Y ' + (ref.fromY === 'back' ? 'from back' : 'from front') + ' ' + formatLength(value(ref.y), unit) + ' (reference only, not a cutout)') })
+    rows.push({ label: label + ' · ' + (ref.basis === 'cabinet' ? 'Cabinet edges' : 'Countertop edges'), text: 'X ' + (ref.fromX === 'left' ? 'from left' : 'from right') + ' ' + display(value(ref.x), unit) + (ref.kind === 'sink' && !ref.y.input.trim() ? ' (X only; not a cutout)' : ' / Y ' + (ref.fromY === 'back' ? 'from back' : 'from front') + ' ' + display(value(ref.y), unit) + ' (reference only, not a cutout)') })
     rows.push({ label: label + ' measurement source', text: 'X ' + originLabels[ref.x.origin] + ' / ' + statusLabels[ref.x.status] + (ref.kind==='sink'&&!ref.y.input.trim() ? '' : ' · Y '+ originLabels[ref.y.origin] + ' / ' + statusLabels[ref.y.status]) })
     for (const warning of referenceGeometry(ref, shape, geometry).warnings) rows.push({ label: label + ' Needs Check', text: warning })
   }
   for (const record of shape.fieldRecords ?? []) {
     const place = record.edge ? ({back:'Back run',right:'Right end',front:'Lower end',left:'Left back run',innerX:'Inside horizontal run',innerY:'Inside vertical run'})[record.edge] : 'Part'
-    if (record.kind === 'measurement') rows.push({label:'Reference measurement / ' + place + (record.label ? ' / ' + record.label : ''),text:fieldMeasurementText(record.measurement,unit) + ' · ' + originLabels[record.measurement.origin] + ' / ' + statusLabels[record.measurement.status]})
+    if (record.kind === 'measurement') rows.push({label:'Reference measurement / ' + place + (record.label ? ' / ' + record.label : ''),text:fieldMeasurementText(record.measurement,unit,display) + ' · ' + originLabels[record.measurement.origin] + ' / ' + statusLabels[record.measurement.status]})
     else rows.push({label:'Field note / ' + place,text:record.text})
   }
   return rows

@@ -1,7 +1,7 @@
 import { DxfWriter, LWPolylineFlags, Units, point2d, point3d } from '@tarikjabiri/dxf'
-import { bounds, referenceGeometry, transformPoint, type Point, type Snapshot } from './geometry'
+import { bounds, measurementRows, referenceGeometry, transformPoint, type Point, type Snapshot } from './geometry'
 import { edgeLabels, edgeOrder } from './model'
-import { formatLength } from './units'
+import { decimalLength } from './units'
 
 // ASCII DXF escape sequences keep Unicode notes without depending on a system codepage.
 // Escape literal CAD formatting characters too; notes never become DXF syntax.
@@ -21,7 +21,7 @@ export function createDxf(snapshot: Snapshot): { text: string; included: string[
   note('FIELD MEASUREMENTS - NOT MANUFACTURING APPROVAL. Layout positions are NOT surveyed locations.', 0, 85)
   let rowY = 0
   for (const entry of snapshot.entries) {
-    const { shape, area, geometry, rows } = entry, label = area.name + ' / ' + shape.name
+    const { shape, area, geometry } = entry, label = area.name + ' / ' + shape.name
     if (!geometry.top) { excluded.push(label); continue }
     included.push(label)
     const transformed = geometry.top.map(p => transformPoint(p, shape)), bb = bounds(transformed)
@@ -39,7 +39,7 @@ export function createDxf(snapshot: Snapshot): { text: string; included: string[
     edgeOrder(shape).forEach((edge, i) => {
       const a = geometry.top![i], b = geometry.top![(i + 1) % geometry.top!.length], wa = world(a), wb = world(b)
       const mid = { x: (wa.x + wb.x) / 2, y: (wa.y + wb.y) / 2 }
-      note(edgeLabels[edge] + ' ' + formatLength(Math.hypot(b.x - a.x, b.y - a.y), snapshot.project.unit), mid.x + 8, mid.y + 12, 'SM_DIM')
+      note(edgeLabels[edge] + ' ' + decimalLength(Math.hypot(b.x - a.x, b.y - a.y), snapshot.project.unit), mid.x + 8, mid.y + 12, 'SM_DIM')
     })
     if (shape.rotation !== 0 || shape.mirrored) {
       const o=world({x:0,y:0}),a=world({x:80,y:0}),b=world({x:0,y:80})
@@ -61,7 +61,7 @@ export function createDxf(snapshot: Snapshot): { text: string; included: string[
       }
     }
     const lines = [
-      ...rows.map(r => r.label + ': ' + r.text),
+      ...measurementRows(shape,snapshot.project.unit,geometry,decimalLength).map(r => r.label + ': ' + r.text),
       ...geometry.warnings.map(w => 'VERIFY: ' + w),
       'Area notes: ' + area.notes, 'Shape notes: ' + shape.notes,
       'SM_REFERENCE entities are positioning references, NOT cutouts.',

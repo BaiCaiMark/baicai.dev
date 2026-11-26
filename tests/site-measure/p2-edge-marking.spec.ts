@@ -24,9 +24,9 @@ test('batch edge marking colors stay visible and do not modify measurements',asy
   await page.getByRole('button',{name:'Add a part'}).click()
   await page.getByRole('group',{name:'Add a part'}).getByRole('button',{name:'＋ Rectangle'}).click()
   const before=await getBackup(page)
-  // Unconfirmed starting defaults are suggestions, not already-confirmed finish colors.
-  await expect(page.locator('[data-edge="front"]').first()).toHaveAttribute('data-treatment','unset')
-  await expect(page.locator('[data-edge="left"]').first()).toHaveAttribute('data-treatment','unset')
+  // Finish presets are visible and independently editable.
+  await expect(page.locator('[data-edge="front"]').first()).toHaveAttribute('data-treatment','polish')
+  await expect(page.locator('[data-edge="left"]').first()).toHaveAttribute('data-treatment','no-polish')
   await page.getByRole('button',{name:'Edge marking'}).click()
   const palette=page.getByRole('toolbar',{name:'Paint edge treatment'})
   await expect(palette).toBeVisible()

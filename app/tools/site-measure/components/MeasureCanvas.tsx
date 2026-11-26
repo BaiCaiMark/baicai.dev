@@ -2,19 +2,20 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { calculate, referenceGeometry, area as polygonArea, type Bounds, type Point } from '../core/geometry'
 import { sinkPin } from './sink-pin'
-import { dimensionLabelLayout } from './dimension-label'
+import { sinkChainPoints, sinkDimensions, sinkDimensionText } from '../core/sink-dimensions'
+import { placeDimensionLabels } from './dimension-label'
 import { canvasNoteLines, noteCardHeight, NOTE_WIDTH } from '../core/canvas-notes'
 import { wallPath, WALL_MAX_POINTS } from '../core/wall-sketch'
 import { edgeOrder, treatmentOf, value, type Area, type Edge, type CanvasNote, type WallSketch } from '../core/model'
 import { projectCanvasItems } from '../core/project-canvas'
-import { edgeNames, edgeLength, finishedEdgeReading, finishedFormula } from '../core/worksheet'
+import { edgeNames, edgeLength, finishedEdgeReading } from '../core/worksheet'
 import { nearestEdge, type ScreenEdge } from './touch'
 import { formatLength, type Unit } from '../core/units'
 
 export type EdgeSelection = { partId: string; edge: Edge }
-type Props = { area: Area; areas: Area[]; wallSketches: WallSketch[]; wallDraft: Point[] | null; wallEditor?: ReactNode; onWallStroke:(points:Point[])=>void; onSelectWall:(id:string)=>void; selectedWallId?:string|null; canvasNotes: CanvasNote[]; notePlacement?: boolean; selectedCanvasNoteId?: string | null; noteEditor?: ReactNode; onPickNoteTarget: (point: Point) => void; onCancelNotePlacement: () => void; onSelectCanvasNote: (id: string) => void; onMoveCanvasNote: (id: string, point: Point) => void; fitRequest?: number; roomFocus?: {id:string} | null; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
+type Props = { allowanceHighlight?:Edge|null; area: Area; areas: Area[]; wallSketches: WallSketch[]; wallDraft: Point[] | null; wallEditor?: ReactNode; onWallStroke:(points:Point[])=>void; onSelectWall:(id:string)=>void; selectedWallId?:string|null; canvasNotes: CanvasNote[]; notePlacement?: boolean; selectedCanvasNoteId?: string | null; noteEditor?: ReactNode; onPickNoteTarget: (point: Point) => void; onCancelNotePlacement: () => void; onSelectCanvasNote: (id: string) => void; onMoveCanvasNote: (id: string, point: Point) => void; fitRequest?: number; roomFocus?: {id:string} | null; selected: string | null; selectedEdge: EdgeSelection | null; selectedReference?: string | null; floatingEditor?: ReactNode; paintToolbar?: ReactNode; paintTreatment?: string | null; directMode?: boolean; unit: Unit; snapEnabled?: boolean; orthoEnabled?: boolean; moving: string | null; toolbar: ReactNode; onSelect: (id: string) => void; onEdge: (selection: EdgeSelection) => void; onDimension?: (selection: EdgeSelection) => void; onRename?: (id:string) => void; onReference?: (partId: string, refId: string) => void; onPlace: (id: string, position: Point) => void }
 const path = (points: Point[]) => points.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z'
-export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wallEditor, onWallStroke, onSelectWall, selectedWallId=null, canvasNotes, notePlacement = false, selectedCanvasNoteId = null, noteEditor, onPickNoteTarget, onCancelNotePlacement, onSelectCanvasNote, onMoveCanvasNote, fitRequest=0, roomFocus, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
+export default function MeasureCanvas({ allowanceHighlight, area, areas, wallSketches, wallDraft, wallEditor, onWallStroke, onSelectWall, selectedWallId=null, canvasNotes, notePlacement = false, selectedCanvasNoteId = null, noteEditor, onPickNoteTarget, onCancelNotePlacement, onSelectCanvasNote, onMoveCanvasNote, fitRequest=0, roomFocus, selected, selectedEdge, selectedReference, floatingEditor, paintToolbar, paintTreatment, directMode, unit, moving, toolbar, snapEnabled = true, orthoEnabled = false, onSelect, onEdge, onDimension, onRename, onReference, onPlace }: Props) {
   const svg = useRef<SVGSVGElement>(null), shell = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number,Point>())
   const gesture = useRef<{center:Point;distance:number;box:Bounds;scale:number;anchor:Point} | null>(null)
@@ -31,16 +32,23 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
   const [editorAnchor,setEditorAnchor]=useState<Point|null>(null)
   const lastBlankTap = useRef<{time:number;point:Point}|null>(null)
   const layout=useMemo(()=>projectCanvasItems(areas),[areas])
+  const labels=useMemo(()=>placeDimensionLabels(layout,!!directMode,unit),[layout,directMode,unit])
   const fitted=useMemo(()=>{
     if(!layout.length&&!canvasNotes.length&&!wallSketches.length)return{x:0,y:0,width:1100,height:650}
     const extents=[
       ...layout.map(p=>({x:p.x,y:p.y,right:p.x+p.width,bottom:p.y+p.height})),
+      ...layout.flatMap(p=>edgeOrder(p.shape).map(edge=>{
+        const l=labels.get(p.shape.id+':'+edge)!,vertical=Math.abs(l.angle)===90
+        const w=vertical?l.height:l.width,h=vertical?l.width:l.height
+        const x=p.x+l.center.x,y=p.y+l.center.y
+        return{x:x-w/2,y:y-h/2,right:x+w/2,bottom:y+h/2}
+      })),
       ...canvasNotes.map(n=>({x:Math.min(n.x,n.targetX),y:Math.min(n.y,n.targetY),right:Math.max(n.x+NOTE_WIDTH,n.targetX),bottom:Math.max(n.y+noteCardHeight(n.text),n.targetY)})),
       ...wallSketches.flatMap(w=>w.points.map(p=>({x:p.x,y:p.y,right:p.x,bottom:p.y})))
     ]
     const x=Math.min(...extents.map(p=>p.x))-120,y=Math.min(...extents.map(p=>p.y))-150
     return{x,y,width:Math.max(...extents.map(p=>p.right+120))-x,height:Math.max(...extents.map(p=>p.bottom+110))-y}
-  },[layout,canvasNotes,wallSketches])
+  },[layout,labels,canvasNotes,wallSketches])
   const fit=useMemo(()=>{
     const box={...fitted}
     if(box.width/box.height<ratio){const w=box.height*ratio;box.x-=(w-box.width)/2;box.width=w}
@@ -62,9 +70,10 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
     if(initialFocused.current)return
     const b=roomBox(firstRoom.current)
     if(!b)return
-    const frame=requestAnimationFrame(()=>{initialFocused.current=true;liveBox.current=b;setManual(b)})
+    const singleRoom=layout.every(item=>item.areaId===firstRoom.current)&&!canvasNotes.length&&!wallSketches.length
+    const frame=requestAnimationFrame(()=>{initialFocused.current=true;if(!singleRoom){liveBox.current=b;setManual(b)}})
     return()=>cancelAnimationFrame(frame)
-  },[roomBox])
+  },[roomBox,layout,canvasNotes.length,wallSketches.length])
   useLayoutEffect(()=>{
     if(!roomFocus||roomFocus===previousRoomFocus.current)return
     const b=roomBox(roomFocus.id)
@@ -130,13 +139,17 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
   },[edgePart,edgeName])
   useLayoutEffect(()=>{
     if(!floatingEditor||(!selectedEdge&&!selectedReference))return
+    if(selectedReference){
+      const position=()=>{const y=Math.max(6,(window.visualViewport?.offsetTop??0)-(shell.current?.getBoundingClientRect().top??0)+6);setEditorAnchor(prev=>prev?.x===8&&prev.y===y?prev:{x:8,y})}
+      position();window.visualViewport?.addEventListener('resize',position);window.visualViewport?.addEventListener('scroll',position)
+      return ()=>{window.visualViewport?.removeEventListener('resize',position);window.visualViewport?.removeEventListener('scroll',position)}
+    }
     const node=svg.current,outer=shell.current
     if(!node||!outer)return
     const line=selectedEdge?[...node.querySelectorAll<SVGLineElement>('.sm-edge-hit')].find(l=>l.closest('[data-shape]')?.getAttribute('data-shape')===selectedEdge.partId&&l.closest('[data-edge]')?.getAttribute('data-edge')===selectedEdge.edge):null
-    const marker=selectedReference?[...node.querySelectorAll<SVGGElement>('[data-sink-ref]')].find(n=>n.getAttribute('data-sink-ref')===selectedReference):null
-    const m=line?.getScreenCTM()??marker?.getScreenCTM()
-    if(!m)return
-    const point=line?new DOMPoint((line.x1.baseVal.value+line.x2.baseVal.value)/2,(line.y1.baseVal.value+line.y2.baseVal.value)/2).matrixTransform(m):new DOMPoint(0,0).matrixTransform(m)
+    const m=line?.getScreenCTM()
+    if(!line||!m)return
+    const point=new DOMPoint((line.x1.baseVal.value+line.x2.baseVal.value)/2,(line.y1.baseVal.value+line.y2.baseVal.value)/2).matrixTransform(m)
     const root=outer.getBoundingClientRect(),popupWidth=Math.min(318,root.width-16),popupHeight=Math.min(348,root.height*.76)
     const x=Math.max(8,Math.min(root.width-popupWidth-8,point.x-root.left-popupWidth/2))
     const desired=point.y-root.top-popupHeight-12
@@ -188,7 +201,7 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
       const target=e.target as Element, wallId=notePlacement?null:((target.closest('[data-wall-sketch]')?.getAttribute('data-wall-sketch')??target.closest('[data-wall-overlay]')?.getAttribute('data-wall-overlay')??null)), noteId=notePlacement?null:(target.closest('[data-canvas-note]')?.getAttribute('data-canvas-note')??null)
       const note=canvasNotes.find(n=>n.id===noteId)
       const handle=!!target.closest('[data-move-handle]')
-      const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??null
+      const refId=target.closest('[data-sink-ref]')?.getAttribute('data-sink-ref')??target.closest('[data-chain-ref]')?.getAttribute('data-chain-ref')??null
       let partId=noteId||wallId||notePlacement?null:(target.closest('[data-shape]')?.getAttribute('data-shape')??null)
       const dimension=!notePlacement&&!noteId&&!!directMode&&!!target.closest('[data-dimension]')
       const nameTap=!notePlacement&&!noteId&&!!directMode&&!!target.closest('[data-part-title]')
@@ -343,12 +356,11 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
           {edgeOrder(shape).map((edge,i)=>{
             const a=points[i],b=points[(i+1)%points.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=sign*dy/len,ny=-sign*dx/len
             const offset=34,la={x:a.x+nx*offset,y:a.y+ny*offset},lb={x:b.x+nx*offset,y:b.y+ny*offset},mid={x:(la.x+lb.x)/2,y:(la.y+lb.y)/2}
-            const active=selectedEdge?.partId===shape.id&&selectedEdge.edge===edge
+            const active=selectedEdge?.partId===shape.id&&(allowanceHighlight??selectedEdge.edge)===edge
             // Cabinet measurements may be used to solve the outline, but must never be displayed as finished dimensions.
             const n=directMode?finishedEdgeReading(shape,edge):(g.top?edgeLength(shape,edge):shape.basis==='finished'?edgeLength(shape,edge,false):null)
-            const formula=directMode?finishedFormula(shape,edge,unit):null
-            const label=dimensionLabelLayout(a,b,!!formula)
-            const labelCenter={x:mid.x+nx*label.lift,y:mid.y+ny*label.lift}
+            const label=labels.get(shape.id+':'+edge)!
+            const {formula,center:labelCenter}=label
             const radians=label.angle*Math.PI/180
             const noteSide=nx*(-Math.sin(radians))+ny*Math.cos(radians)>=0?1:-1
             return <g key={edge} data-edge={edge} role="button" tabIndex={0} aria-label={shape.name+' '+edgeNames[edge]} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setManual(liveBox.current);onEdge({partId:shape.id,edge})}}} className="sm-edge" data-selected={active} data-treatment={treatmentOf(shape,edge)??"unset"}>
@@ -357,7 +369,7 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
               <line className="sm-dimension-line" x1={la.x} y1={la.y} x2={lb.x} y2={lb.y}/>
               {[{p:a,q:la},{p:b,q:lb}].map((p,j)=><line key={j} className="sm-dimension-line" x1={p.p.x} y1={p.p.y} x2={p.q.x+nx*5} y2={p.q.y+ny*5}/>)}
               <line className="sm-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
-              {label.lift>0?<line className="sm-dimension-leader" x1={mid.x} y1={mid.y} x2={labelCenter.x} y2={labelCenter.y}/>:null}
+              {label.leader?<line className="sm-dimension-leader" x1={mid.x} y1={mid.y} x2={labelCenter.x} y2={labelCenter.y}/>:null}
               <g className="sm-dimension-label" data-dimension-label="true" data-label-angle={label.angle} data-short-edge={label.lift>0}
                 transform={'translate('+labelCenter.x+' '+labelCenter.y+') rotate('+label.angle+')'}>
                 <rect data-dimension="true" className="sm-label-bg" x={-label.width/2} y={-label.height/2} width={label.width} height={label.height} rx="6" role={directMode?'button':undefined} tabIndex={directMode?0:undefined} aria-label={directMode?'Edit finished dimension '+shape.name+' '+edge:undefined} onKeyDown={e=>{if(directMode&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.stopPropagation();onDimension?.({partId:shape.id,edge})}}}/>
@@ -375,6 +387,25 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
               {rg.lines[0]&&(!directMode||ref.kind!=='sink')?<text x={local(rg.lines[0].a).x+8} y={local(rg.lines[0].a).y+24}>{ref.kind==='sink'?'Sink Center':'Cooktop'}{value(ref.y)===null?' · Y unknown':value(ref.x)===null?' · X unknown':''}</text>:null}
             </g>
           }):null}
+          {shape.references.filter(ref=>ref.kind==='sink').map((ref,index,sinks)=>{
+            const chain=sinkChainPoints(ref,shape,g,(index+1)/(sinks.length+1))?.map(local)
+            if(!chain)return null
+            const readings=sinkDimensions(shape,ref,unit)
+            return <g className="sm-sink-chain" data-chain-ref={ref.id} key={'chain-'+ref.id}>
+              {(['left','right'] as const).map((side,i)=>{
+                const a=chain[i],b=chain[i+1],mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2}
+                const angle=a.x===b.x?-90:0
+                return <g key={side} data-measured={side===ref.fromX}>
+                  <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>
+                  {[a,b].map((p,j)=><path key={j} d={'M '+(p.x-3)+' '+(p.y+4)+' l 6 -8'}/>)}
+                  <g transform={'translate('+mid.x+' '+mid.y+') rotate('+angle+')'}>
+                    <text y="-5">{'S'+(index+1)+' '+side+' · '+(ref.basis==='cabinet'?'Cab':'Fin')+' '+sinkDimensionText(ref.basis==='cabinet'?readings[side].cabinet:readings[side].finished,unit)+(ref.fromX===side?' measured':'')}</text>
+                    {ref.basis==='cabinet'?<text y="13">Fin {sinkDimensionText(readings[side].finished,unit)}</text>:null}
+                  </g>
+                </g>
+              })}
+            </g>
+          })}
           {shape.references.map(ref=>{
             const rg=g.top?referenceGeometry(ref,shape,g):null
             const point=rg?.point?local(rg.point):ref.kind==='sink'?sinkPin(ref,shape,g,local,item.width,item.height):{x:item.width*.5,y:item.height*.5}
@@ -382,8 +413,9 @@ export default function MeasureCanvas({ area, areas, wallSketches, wallDraft, wa
             const sinkNumber=shape.references.filter(r=>r.kind==='sink').findIndex(r=>r.id===ref.id)+1
             return <g key={'pin-'+ref.id} className="sm-direct-sink-pin" data-sink-ref={ref.id} data-x-only={ref.kind==='sink'&&value(ref.y)===null} transform={'translate('+point.x+' '+point.y+')'} role="button" tabIndex={0}
               aria-label={'Edit '+(ref.kind==='sink'?'Sink Center':'Cooktop')+' location'} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onReference?.(shape.id,ref.id)}}}>
-              <rect x="-38" y="-18" width="76" height="36" rx="8"/>
-              <text textAnchor="middle" y="5">{ref.kind==='sink'?'S'+sinkNumber+' '+(positioned?formatLength(value(ref.x),unit):'?'):'Cooktop'}{ref.kind==='sink'?'':positioned?'':' ?'}</text>
+              <title>{ref.fromX+' '+ref.basis+' · '+formatLength(value(ref.x),unit)}</title>
+              <rect x="-38" y="-18" width="76" height="36" rx="8" fillOpacity={g.top&&ref.kind==='sink'?0:1} style={g.top&&ref.kind==='sink'?{stroke:'none'}:undefined}/>
+              {g.top&&ref.kind==='sink'&&sinkChainPoints(ref,shape,g,.5)?null:<text textAnchor="middle" y="5">{ref.kind==='sink'?'S'+sinkNumber+' '+ref.fromX+' '+(ref.basis==='cabinet'?'Cab':'Fin')+' '+(positioned?formatLength(value(ref.x),unit):'?'):'Cooktop'}{ref.kind==='sink'?'':positioned?'':' ?'}</text>}
             </g>
           })}
           {selected===shape.id&&!directMode?<g data-move-handle="true" className="sm-move-handle" role="button" tabIndex={0} aria-label={'Drag '+shape.name} transform={'translate('+(item.width+30*screenScale)+' '+(-55*screenScale)+') scale('+screenScale+')'} onKeyDown={e=>{

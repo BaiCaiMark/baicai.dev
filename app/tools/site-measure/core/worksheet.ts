@@ -1,6 +1,6 @@
 import { bounds, calculate, transformPoint, type Point } from './geometry'
 import { edgeOrder, value, type Edge, type Param, type Shape } from './model'
-import { formatLength, numeric, type Unit } from './units'
+import { formatLength, type Unit } from './units'
 
 export const edgeNames: Record<Edge, string> = {
   back: 'Back run', right: 'Right end', front: 'Front edge', left: 'Left back run',
@@ -31,9 +31,16 @@ export function dimensionTerms(shape: Shape, edge: Edge): DimensionTerms | null 
     back:{parameter:'width',start:'left',end:'right',endSign:1},
     right:{parameter:'legX',start:'back',end:'innerX',endSign:1},
     left:{parameter:'height',start:'back',end:'front',endSign:1},
-    front:{parameter:'legY',start:'left',end:'innerY',endSign:-1},
+    front:{parameter:'legY',start:'left',end:'innerY',endSign:1},
   }
   return terms[edge]??null
+}
+export function displayedDimensionTerms(shape: Shape, edge: Edge) {
+  const terms=dimensionTerms(shape,edge)
+  if(!terms)return null
+  const horizontal=terms.parameter==='width'||terms.parameter==='legY'
+  const direction=transformPoint(horizontal?{x:1,y:0}:{x:0,y:1},shape)
+  return direction.x<0||direction.y<0 ? {...terms,start:terms.end,end:terms.start} : terms
 }
 /** Show a valid, individually resolved Finished run even if the other axis is still unmeasured.
  * A partial reading NEVER makes geometry ready for fabrication or DXF export.
@@ -63,7 +70,7 @@ export function finishedEdgeReading(shape: Shape, edge: Edge): number | null {
   }else if(shape.template==='l'){
     const w=value(shape.dimensions.width),h=value(shape.dimensions.height),a=value(shape.dimensions.legX),b=value(shape.dimensions.legY)
     if(edge==='innerX'&&w!==null&&b!==null&&amount('right')!==null&&amount('innerY')!==null)
-      result=w-b+amount('right')!+amount('innerY')!
+      result=w-b+amount('right')!-amount('innerY')!
     if(edge==='innerY'&&h!==null&&a!==null&&amount('front')!==null&&amount('innerX')!==null)
       result=h-a+amount('front')!-amount('innerX')!
   }
@@ -73,16 +80,12 @@ export function finishedEdgeReading(shape: Shape, edge: Edge): number | null {
  * This is a reading of real cabinet + overhang values, not a second geometry model.
  */
 export function finishedFormula(shape: Shape, edge: Edge, unit: Unit): string | null {
-  if (shape.template!=='rectangle' || shape.basis!=='cabinet' || (edge!=='back'&&edge!=='right')) return null
-  const terms=dimensionTerms(shape,edge)
+  if (shape.basis!=='cabinet' || (shape.template==='rectangle' && edge!=='back'&&edge!=='right')) return null
+  const terms=displayedDimensionTerms(shape,edge)
   if(!terms?.parameter || finishedEdgeReading(shape,edge)===null) return null
-  const parts=[shape.dimensions[terms.parameter],shape.allowances[terms.start],shape.allowances[terms.end]]
-  const numbers=parts.map(q=>value(q))
-  if(numbers.some(n=>n===null)) return null
-  const show=(i:number)=>parts[i].unit===unit?parts[i].input.trim().replace(/[″”"]$/,'').trim():numeric(numbers[i]!,unit)
-  const ingredients=[show(0)]
-  if(numbers[1]!>0)ingredients.push(show(1))
-  if(numbers[2]!>0)ingredients.push(show(2))
+  const numbers = [value(shape.allowances[terms.start]), value(shape.dimensions[terms.parameter]), value(shape.allowances[terms.end])]
+  if (numbers.some(n => n === null)) return null
+  const ingredients = numbers.filter((n, i) => i === 1 || n !== 0).map(n => formatLength(n, unit).replace(/″$| mm$/, ''))
   return ingredients.length>1?ingredients.join(' + '):null
 }
 export function edgeLength(shape: Shape, edge: Edge, finished = true): number | null {

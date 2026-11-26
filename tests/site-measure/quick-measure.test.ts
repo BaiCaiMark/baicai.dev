@@ -16,10 +16,10 @@ test('one common vanity rectangle can be measured with two lengths and a single 
   const g=calculate(s)
   assert.ok(g.top)
   assert.equal(formatLength(bounds(g.top!).width,'in'),'61″')
-  assert.equal(formatLength(bounds(g.top!).height,'in'),'22.5″')
+  assert.equal(formatLength(bounds(g.top!).height,'in'),'22 1/2″')
   const rows=measurementRows(s,'in',g)
   assert.equal(rows.find(r=>r.label.startsWith('Finished length'))?.text,'60″ + 1″ = 61″')
-  assert.equal(rows.find(r=>r.label.startsWith('Finished depth'))?.text,'21″ + 1.5″ = 22.5″')
+  assert.equal(rows.find(r=>r.label.startsWith('Finished depth'))?.text,'21″ + 1 1/2″ = 22 1/2″')
   assert.ok(rows.find(r=>r.label==='Treatment Right end')?.text.includes('Polish'))
 })
 test('stove adjacent polish edges allow zero and one eighth overhang without invented values',()=>{

@@ -10,7 +10,7 @@ import OfflineStatus from './OfflineStatus'
 import QuantityField from './components/QuantityField'
 import { calculate, exportSnapshot } from './core/geometry'
 import { historyReducer, initialHistory } from './core/history'
-import { applyCanvasOpenDefaults, applyRectangleQuickDefaults, markTreatment, nextPartNameForArea, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape, type Treatment, type CanvasNote } from './core/model'
+import { edgeOrder, setEdgeOpen, applyCanvasOpenDefaults, applyRectangleQuickDefaults, markTreatment, nextPartNameForArea, duplicateShape, importCopy, newProject, newShape, newVanityStep, newReference, parseBackup, worksheetSample, uid, type Edge, type Project, type Shape, type Treatment, type CanvasNote } from './core/model'
 import { worksheetLayout } from './core/worksheet'
 import { ProjectStore } from './core/storage'
 import { canvasNoteAt, movedCanvasNote } from './core/canvas-notes'
@@ -248,20 +248,25 @@ export default function Studio() {
       }
     } catch (e) { setError('Export failed: ' + errorText(e)) } finally { setBusy(false) }
   }
-  const addShape = (template: Shape['template'] | 'vanity-step-left' | 'vanity-step-right') => {
+  const addShape = (template: Shape['template'] | 'vanity-step-left' | 'vanity-step-right' | 'island') => {
     if (!area || !project) return
     areaDetails.current?.removeAttribute('open')
     if (area.shapes.length >= 60 || project.areas.reduce((n, a) => n + a.shapes.length, 0) >= 200) { setError('Limit: 60 parts per area, 200 per project'); return }
     const s = template.startsWith('vanity-step-')
       ? newVanityStep(project, template === 'vanity-step-left' ? 'left' : 'right', area.shapes.length + 1)
-      : newShape(template as Shape['template'], project.unit, area.shapes.length + 1)
+      : newShape(template === 'island' ? 'rectangle' : template as Shape['template'], project.unit, area.shapes.length + 1)
     if(directMode)s.name=nextPartNameForArea(area)
+    if(template==='island')s.name=nextPartNameForArea({...area,name:'Island'})
     applyRectangleQuickDefaults(s,project)
     if(directMode){
       applyCanvasOpenDefaults(s,project)
-      // Suggestions for OPEN and allowance do not imply confirmed manufacturing markings.
-      // An edge becomes colored only after an explicit field-treatment choice.
-      s.treatments={}
+      if(template==='island') {
+        for(const edge of edgeOrder(s)) {
+          setEdgeOpen(s,edge,true,project)
+          s.allowances[edge]={...project.defaults.end,origin:'default',defaultRevision:project.defaults.revision}
+          markTreatment(s,edge,'polish')
+        }
+      }
     }
     const existing = projectCanvasItems(project.areas)
     s.layout = {x:100,y:Math.min(10000,Math.max(-90,...existing.map(p=>p.y+p.height))+240)}
@@ -286,11 +291,13 @@ export default function Studio() {
     }
     renameCancelled.current=false;setRenameId(null)
   }
+  const [allowanceEdge,setAllowanceEdge]=useState<{partId:string;dimension:Edge;edge:Edge}|null>(null)
   const addSinkDirect=()=>{
     if(!shape||!project)return
     if(shape.references.length>=30)return
-    const ref=newReference('sink',project.unit)
+    const ref=newReference('sink',project.unit,shape.basis === 'cabinet' ? 'cabinet' : 'countertop')
     editShape(s=>s.references.push(ref))
+    setPartToolsOpen(false)
     setSelectedEdge(null);setActiveRef(ref.id);setDimensionMode(false);setPanelOpen(false);setMoving(null);end()
   }
   const duplicatePart = () => {
@@ -328,6 +335,7 @@ export default function Studio() {
     {immersive&&addMenuOpen&&area?<div className="sm-v2-popover sm-v2-add" role="group" aria-label="Add a part">
       <strong>Add to canvas</strong>
       <button onClick={()=>{addShape('rectangle');setAddMenuOpen(false)}}>＋ Rectangle</button>
+      <button onClick={()=>{addShape('island');setAddMenuOpen(false)}}>＋ Island</button>
       <button onClick={()=>{addShape('l');setAddMenuOpen(false)}}>＋ L-shape</button>
       <button onClick={()=>{addShape('vanity-step-left');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Left</button>
       <button onClick={()=>{addShape('vanity-step-right');setAddMenuOpen(false)}}>＋ Vanity Step · Deep Right</button>
@@ -396,7 +404,7 @@ export default function Studio() {
       {projects.length?<div className="sm-recent"><h3>Continue a project</h3>{projects.slice(0,5).map(p=><button key={p.id} onClick={()=>void open(p.id)}>{p.name}<span>Open →</span></button>)}</div>:null}
       <p className="sm-muted">Projects stay in this browser. Keep a portable backup. Preview and production use separate local storage.</p>
     </section>:<>
-      {exportOpen?<section className="sm-export-panel"><div><h2>Export field drawing</h2><p>PDF is a minimal field drawing: Part outlines, finished dimensions, Sink Center, Canvas Notes and schematic Wall Sketches. No per-edge text report. DXF includes only complete geometry; sketches and notes are never CNC contours.</p>{excluded.length?<p className="sm-error-text">Excluded from DXF: {excluded.map(e=>e.area.name+' / '+e.shape.name).join(', ')}</p>:null}</div><div className="sm-actions"><button disabled={busy} onClick={()=>void exportFile('pdf')}>{busy?'Working…':'Export PDF'}</button><button disabled={busy||!all?.entries.some(e=>e.geometry.top)} onClick={()=>void exportFile('dxf')}>Export DXF</button></div></section>:null}
+      {exportOpen?<section className="sm-export-panel"><div><h2>Export field drawing</h2><p>PDF includes a dimensioned sheet for each part and an overview for canvas notes and wall sketches. DXF includes complete outlines in millimetres.</p>{excluded.length?<p className="sm-error-text">Excluded from DXF: {excluded.map(e=>e.area.name+' / '+e.shape.name).join(', ')}</p>:null}</div><div className="sm-actions"><button disabled={busy} onClick={()=>void exportFile('pdf')}>{busy?'Working…':'Export PDF'}</button><button disabled={busy||!all?.entries.some(e=>e.geometry.top)} onClick={()=>void exportFile('dxf')}>Export DXF</button></div></section>:null}
       {defaultsOpen?<section className="sm-defaults"><div><h2>Project overhang defaults</h2><p>Apply only to a named edge. Changing these values does not change existing parts.</p></div>{(['end','front'] as const).map(key=><QuantityField key={key} label={key==='end'?'Typical end overhang':'Typical front overhang'} quantity={project.defaults[key]} unit={project.unit} allowance onEnd={end} onChange={q=>edit(p=>{p.defaults[key]=q;p.defaults.revision++},'default-'+key)}/>)}</section>:null}
       <div className="sm-area-bar"><div className="sm-area-tabs" aria-label="Areas">{project.areas.map(a=><button key={a.id} aria-pressed={area?.id===a.id} onClick={()=>{setAreaId(a.id);selectPart(a.shapes[0]?.id??'');setRoomFocus({id:a.id})}}>{a.name}<span>{a.shapes.length} parts</span></button>)}</div><button onClick={()=>{if(project.areas.length>=30)return;const id=uid();edit(p=>p.areas.push({id,name:'Area '+(p.areas.length+1),notes:'',shapes:[]}));setAreaId(id);setShapeId(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}>＋ Area</button></div>
       {area?<>
@@ -443,7 +451,8 @@ export default function Studio() {
               <button type="button" className="sm-paint-exit" onClick={()=>{setPaintOpen(false);setPaintTreatment(null)}}>Done</button>
               <small>{paintTreatment?'Tap finished edges · '+paintTreatment:'Choose a finish, then tap edges'}</small>
             </div>:null}
-            floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?(dimensionMode?<CanvasDimensionEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>{setSelectedEdge(null);setDimensionMode(false)}}/>:<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):activeRef?(shape.references.find(r=>r.id===activeRef)?.kind==='sink'?<CanvasSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):null):null}
+            allowanceHighlight={dimensionMode&&allowanceEdge?.partId===shape?.id&&allowanceEdge?.dimension===selectedEdge?allowanceEdge?.edge:null}
+            floatingEditor={directMode&&!panelOpen&&shape&&project?(selectedEdge?(dimensionMode?<CanvasDimensionEditor onHighlight={edge=>setAllowanceEdge(edge?{partId:shape.id,dimension:selectedEdge,edge}:null)} key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>{setSelectedEdge(null);setDimensionMode(false)}}/>:<DirectEdgeEditor key={shape.id+selectedEdge} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onClose={()=>setSelectedEdge(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):activeRef?(shape.references.find(r=>r.id===activeRef)?.kind==='sink'?<CanvasSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>:<DirectSinkEditor key={activeRef} project={project} shape={shape} refId={activeRef} onChange={editShape} onEnd={end} onClose={()=>setActiveRef(null)} onAdvanced={()=>{setPanelOpen(true);setAdvanced(true);setActiveRef(null)}}/>):null):null}
             toolbar={shape&&(!immersive||partToolsOpen)?<div className="sm-part-toolbar" role="toolbar" aria-label="Selected part actions">
               {renameId===shape.id?
                 <><input className="sm-inline-part-name" aria-label="Part name" autoFocus value={renameDraft} maxLength={120} onChange={e=>setRenameDraft(e.target.value)}
@@ -475,7 +484,7 @@ export default function Studio() {
               }
               end();selectPart(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(false);setActiveRef(null);setPanelOpen(!directMode);setAdvanced(false);setMoving(null);setDeleteTarget(null)
             }}
-            onDimension={selection=>{end();selectPart(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(true);setActiveRef(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}
+            onDimension={selection=>{end();setAllowanceEdge(null);selectPart(selection.partId);setSelectedEdge(selection.edge);setDimensionMode(true);setActiveRef(null);setPanelOpen(false);setMoving(null);setDeleteTarget(null)}}
             onReference={(partId,refId)=>{end();selectPart(partId);setActiveRef(refId);setSelectedEdge(null);setDimensionMode(false);setPanelOpen(!directMode);setAdvanced(true);setMoving(null);setDeleteTarget(null)}}
             onPlace={(id,position)=>edit(p=>{const owner=p.areas.find(a=>a.shapes.some(s=>s.id===id));const part=owner?.shapes.find(s=>s.id===id);if(part)part.layout=position})}/>
           {panelOpen&&shape?(advanced?<PartEditor key={shape.id+(selectedEdge??'part')} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onRemove={()=>{setDeleteTarget(shape.id);setPanelOpen(false);setMoving(null)}} onClose={()=>{end();setPanelOpen(false);setSelectedEdge(null)}}/>:<QuickMeasurePanel key={shape.id+(selectedEdge??'part')} project={project} shape={shape} edge={selectedEdge} onChange={editShape} onEnd={end} onDetails={()=>setAdvanced(true)} onClose={()=>{end();setPanelOpen(false);setSelectedEdge(null)}}/>):null}

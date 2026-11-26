@@ -21,6 +21,22 @@ export function parseLength(text: string, unit: Unit): number | null {
 export function numeric(mm: number, unit: Unit): string {
   return (mm / (unit === 'in' ? 25.4 : 1)).toFixed(6).replace(/\.?0+$/, '') || '0'
 }
-export function formatLength(mm: number | null, unit: Unit): string {
+export function decimalLength(mm: number | null, unit: Unit): string {
   return mm === null ? 'Unknown' : numeric(mm, unit) + (unit === 'in' ? '″' : ' mm')
+}
+export function formatLength(mm: number | null, unit: Unit): string {
+  if (mm === null) return 'Unknown'
+  if (unit === 'mm') return numeric(mm, unit) + ' mm'
+  const inches = Math.abs(mm / 25.4)
+  const ticks = Math.round(inches * 16)
+  if (Math.abs(ticks / 16 - inches) > 1e-10) return numeric(mm, unit) + '″'
+  const whole = Math.floor(ticks / 16)
+  let numerator = ticks % 16
+  if (!numerator) return (mm < 0 ? '-' : '') + whole + '″'
+  let denominator = 16
+  while (numerator % 2 === 0) {
+    numerator /= 2
+    denominator /= 2
+  }
+  return (mm < 0 ? '-' : '') + (whole ? whole + ' ' : '') + numerator + '/' + denominator + '″'
 }

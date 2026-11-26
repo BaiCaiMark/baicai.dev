@@ -39,7 +39,7 @@ test('PDF has embedded Unicode font, vector pages and shared numeric composition
   fs.writeFileSync('artifacts/site-measure/sample-rows.json',JSON.stringify(exportSnapshot(p).entries.map(e=>e.rows)))
   assert.ok(pdf.length>10000)
 })
-test('minimal PDF is one shared-canvas field drawing with notes and wall sketches',()=>{
+test('PDF preserves the shared notes and wall overview alongside readable part sheets',()=>{
   const p=sampleProject()
   p.canvasNotes=[{id:'field-note-1',text:'Wall not straight',x:250,y:90,targetX:195,targetY:195}]
   p.wallSketches=[{id:'field-wall-1',name:'Wall sketch 1',kind:'schematic',points:[
@@ -49,9 +49,9 @@ test('minimal PDF is one shared-canvas field drawing with notes and wall sketche
   const shot=exportSnapshot(p)
   const pdf=createPdf(shot,font)
   assert.equal(new TextDecoder().decode(pdf.subarray(0,5)),'%PDF-')
-  // A single drawing sheet, rather than the previous report with one page per Part.
+  // Four part sheets, including their short notes, and the spatial overview.
   const structure=Buffer.from(pdf).toString('latin1')
-  assert.equal((structure.match(/\/Type \/Page\b/g)??[]).length,1)
+  assert.equal((structure.match(/\/Type \/Page\b/g)??[]).length,5)
   assert.ok(pdf.length>10000)
   fs.mkdirSync('artifacts/site-measure',{recursive:true})
   fs.writeFileSync('artifacts/site-measure/minimal-field-drawing.pdf',pdf)

@@ -30,8 +30,15 @@ export function DirectEdgeEditor({project,shape,edge,onChange,onEnd,onClose,onAd
   return <section className="sm-direct-editor" aria-label={name+' edge properties'}>
     <header><div><strong>{name} · Edge</strong><span>OPEN / Treatment</span></div><button aria-label="Close direct editor" onClick={()=>{onEnd();onClose()}}>×</button></header>
     <div className="sm-direct-open" aria-label={name+' exposed edge'}>
-      <strong>Exposure</strong><div><button type="button" aria-pressed={edgeOpen===true} onClick={()=>{onChange(s=>setEdgeOpen(s,edge,true,project));onEnd()}}>OPEN</button><button type="button" aria-pressed={edgeOpen===false} onClick={()=>{onChange(s=>setEdgeOpen(s,edge,false,project));onEnd()}}>Not OPEN</button></div>
+      <strong>Exposure</strong><div><button type="button" aria-pressed={edgeOpen===true} onClick={()=>{onChange(s=>setEdgeOpen(s,edge,true,project));onEnd()}}>OPEN</button><button type="button" aria-pressed={!!shape.wallAllowances?.[edge]} onClick={()=>{onChange(s=>setEdgeOpen(s,edge,false,project));onEnd()}}>Wall</button></div>
     </div>
+    {edgeOpen===false&&!shape.wallAllowances?.[edge]?<small>Saved exposure: Not OPEN</small>:null}
+    {shape.basis==='cabinet'&&!shape.wallAllowances?.[edge]?<label className="sm-direct-row">Overhang ({project.unit})
+      {shortInput(shape.allowances[edge],project.unit,name+' overhang',text=>onChange(s=>{
+        s.allowances[edge]=quantity(text,project.unit,'allowance')
+      },shape.id+'overhang-'+edge),onEnd)}
+    </label>:null}
+    {shape.wallAllowances?.[edge] && value(shape.wallAllowances[edge]!) ? <small>Stored overhang {formatLength(value(shape.wallAllowances[edge]!),project.unit)} · select OPEN to restore.</small> : null}
     <div className="sm-direct-treatment"><div className="sm-direct-label"><strong>Edge Treatment</strong></div>
       <div className="sm-direct-chips" aria-label={name+' treatment'}>{treatments.map(t=><button key={t.id} data-treatment={t.id} type="button" aria-pressed={treatment===t.id} onClick={()=>editTreatment(t.id)}>{t.label}</button>)}</div>
     </div>
