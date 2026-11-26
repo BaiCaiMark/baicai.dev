@@ -1,25 +1,25 @@
 'use client'
-import { edgeControl, finishedEdgeReading, dimensionTerms } from '../core/worksheet'
+import { edgeControl, finishedEdgeReading, displayedDimensionTerms } from '../core/worksheet'
 import { numeric, formatLength } from '../core/units'
-import { quantity, value, type Edge, type Param, type Project, type Quantity, type Shape } from '../core/model'
+import { quantity, setEdgeOpen, value, type Edge, type Param, type Project, type Quantity, type Shape } from '../core/model'
 
 type Props = {
   project: Project; shape: Shape; edge: Edge
   onChange: (fn:(s:Shape)=>void,group?:string)=>void
-  onEnd:()=>void; onClose:()=>void
+  onEnd:()=>void; onClose:()=>void; onHighlight:(edge:Edge|null)=>void
 }
 const sideLabel:Record<Edge,string>={back:'Back',right:'Right',front:'Front',left:'Left',innerX:'Inside',innerY:'Inside'}
 function inputText(q:Quantity,unit:Project['unit']) {
   const n=value(q)
   return q.unit===unit || n===null ? q.input : numeric(n,unit)
 }
-export default function CanvasDimensionEditor({project,shape,edge,onChange,onEnd,onClose}:Props) {
+export default function CanvasDimensionEditor({project,shape,edge,onChange,onEnd,onClose,onHighlight}:Props) {
   const control=edgeControl(shape,edge)
-  const terms=dimensionTerms(shape,edge)
+  const terms=displayedDimensionTerms(shape,edge)
   const current=finishedEdgeReading(shape,edge)
   const unit=project.unit
   const renderInput=(q:Quantity,label:string,update:(text:string)=>void,focused=false)=><input
-    aria-label={label} inputMode="decimal" autoComplete="off" spellCheck={false}
+    aria-label={label} inputMode={unit==='in'?'text':'decimal'} autoComplete="off" spellCheck={false}
     autoFocus={focused} value={inputText(q,unit)} maxLength={80} placeholder="?"
     aria-invalid={!!q.input.trim() && value(q)===null}
     onChange={e=>update(e.target.value)}
@@ -30,7 +30,11 @@ export default function CanvasDimensionEditor({project,shape,edge,onChange,onEnd
   const allowanceField=(key:Edge,label:string)=>{
     const q=shape.allowances[key]
     const set=(text:string)=>onChange(s=>{s.allowances[key]=quantity(text,unit,'allowance')},shape.id+'overhang-'+key)
-    return <div className="sm-dimension-cell" key={key}>
+    if (shape.wallAllowances?.[key]) return <div className="sm-dimension-cell" key={key}>
+      <label>{label} · Wall</label>
+      <button type="button" onFocus={()=>onHighlight(key)} onClick={()=>{onChange(s=>setEdgeOpen(s,key,true,project));onEnd()}}>Set OPEN</button>
+    </div>
+    return <div className="sm-dimension-cell" key={key} onPointerDown={()=>onHighlight(key)} onFocus={()=>onHighlight(key)}>
       <label>{label}</label>
       {renderInput(q,label+' overhang',set)}
       <div className="sm-dimension-presets" aria-label={label+' presets'}>

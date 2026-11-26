@@ -15,8 +15,8 @@ test('Quick Measure: cabinet 60×21, right polish, finished 61×22.5 without fou
   await quick.getByRole('button',{name:'Polish',exact:true}).click()
   await expect(right).toContainText('1″')
   await expect(quick.locator('.sm-quick-result')).toContainText('60″ + 1″ = 61″')
-  await expect(quick.locator('.sm-quick-result')).toContainText('21″ + 1.5″ = 22.5″')
-  await expect(quick.locator('.sm-quick-final')).toContainText('Finished: 61″ × 22.5″')
+  await expect(quick.locator('.sm-quick-result')).toContainText('21″ + 1 1/2″ = 22 1/2″')
+  await expect(quick.locator('.sm-quick-final')).toContainText('Finished: 61″ × 22 1/2″')
   await expect(page.locator('path.sm-top')).toHaveCount(1)
   await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')
   await quick.getByRole('button',{name:'Done',exact:true}).click()
@@ -31,10 +31,10 @@ test('a stove-adjacent edge keeps custom 1/8 with Polish, and Miter does not aut
   await quick.locator('.sm-quick-edge-grid button').filter({hasText:'Right'}).click()
   await quick.getByRole('button',{name:'Polish',exact:true}).click()
   await quick.getByRole('button',{name:'1/8″',exact:true}).click()
-  await expect(quick.locator('.sm-quick-final')).toContainText('60.125″')
+  await expect(quick.locator('.sm-quick-final')).toContainText('60 1/8″')
   await quick.getByRole('button',{name:'Miter',exact:true}).click()
   await expect(quick.locator('.sm-quick-notice')).toContainText('not calculated')
-  await expect(quick.locator('.sm-quick-final')).toContainText('60.125″')
+  await expect(quick.locator('.sm-quick-final')).toContainText('60 1/8″')
 })
 
 test('selected part drags from its interior; Ortho keeps the alignment without a move handle',async({page})=>{

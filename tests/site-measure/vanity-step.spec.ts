@@ -16,7 +16,7 @@ test('DXF-derived bathroom step starts as unmeasured guide; real dimensions driv
   await panel.getByRole('textbox',{name:'Shallow depth'}).fill('7')
   await panel.getByRole('textbox',{name:'Deep section width'}).fill('40')
   await expect(page.locator('path.sm-top')).toHaveCount(1)
-  await expect(panel.locator('.sm-quick-final')).toContainText('70″ × 22.5″')
+  await expect(panel.locator('.sm-quick-final')).toContainText('70″ × 22 1/2″')
   await panel.getByRole('button',{name:'Deep Left',exact:true}).click()
   await expect(panel).toContainText('Stepped Vanity · Deep Left')
   await expect(page.locator('.sm-save-state')).toHaveText('Saved in this browser')

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { applyCanvasOpenDefaults, newProject, newShape, newReference, quantity, type Edge } from '../../app/tools/site-measure/core/model'
-import { calculate, measurementRows, referenceGeometry } from '../../app/tools/site-measure/core/geometry'
+import { calculate, measurementRows, referenceGeometry, transformPoint } from '../../app/tools/site-measure/core/geometry'
 import { dimensionTerms, finishedEdgeReading, finishedFormula } from '../../app/tools/site-measure/core/worksheet'
 import { formatLength } from '../../app/tools/site-measure/core/units'
 
@@ -16,8 +16,8 @@ test('rectangle finished direction appears immediately even before the other axi
   assert.equal(formatLength(finishedEdgeReading(shape,'front'),'in'),'61″')
   assert.equal(calculate(shape).top,null)
   shape.dimensions.height=quantity('21')
-  assert.equal(formatLength(finishedEdgeReading(shape,'right'),'in'),'22.5″')
-  assert.equal(formatLength(finishedEdgeReading(shape,'left'),'in'),'22.5″')
+  assert.equal(formatLength(finishedEdgeReading(shape,'right'),'in'),'22 1/2″')
+  assert.equal(formatLength(finishedEdgeReading(shape,'left'),'in'),'22 1/2″')
   assert.ok(calculate(shape).top)
   assert.deepEqual(dimensionTerms(shape,'back'),{parameter:'width',start:'left',end:'right',endSign:1})
   assert.deepEqual(dimensionTerms(shape,'right'),{parameter:'height',start:'back',end:'front',endSign:1})
@@ -43,8 +43,38 @@ test('L independent directional formulas agree with true finished polygon under 
     const i=edges.indexOf(edge),a=g.top![i],b=g.top![(i+1)%edges.length]
     assert.ok(Math.abs(n!-Math.hypot(b.x-a.x,b.y-a.y))<1e-6,edge)
   }
-  assert.deepEqual(dimensionTerms(s,'front'),{parameter:'legY',start:'left',end:'innerY',endSign:-1})
+  assert.deepEqual(dimensionTerms(s,'front'),{parameter:'legY',start:'left',end:'innerY',endSign:1})
   assert.equal(dimensionTerms(s,'innerX'),null)
+})
+
+test('L arm and notch readings match each isolated outward offset before and after the outline resolves', () => {
+  const edges: Edge[] = ['back', 'right', 'innerX', 'innerY', 'front', 'left']
+  const unneededAllowance: Record<Edge, Edge> = {
+    back: 'front', right: 'left', innerX: 'back', innerY: 'right', front: 'back', left: 'right',
+  }
+  for (const changed of edges) {
+    const shape = newShape('l', 'in')
+    shape.dimensions = { width: quantity('60'), height: quantity('39'), legX: quantity('24'), legY: quantity('24') }
+    for (const edge of edges) shape.allowances[edge] = quantity(edge === changed ? '1.5' : '0')
+    const top = calculate(shape).top
+    assert.ok(top)
+    for (const [index, edge] of edges.entries()) {
+      const partial = structuredClone(shape)
+      partial.allowances[unneededAllowance[edge]] = quantity('')
+      assert.equal(calculate(partial).top, null)
+      const reading = finishedEdgeReading(partial, edge)
+      assert.ok(reading !== null)
+      for (const mirrored of [false, true]) {
+        for (const rotation of [0, 90, 180, 270] as const) {
+          const a = transformPoint(top[index], { mirrored, rotation })
+          const b = transformPoint(top[(index + 1) % edges.length], { mirrored, rotation })
+          assert.ok(Math.abs(reading - Math.hypot(a.x - b.x, a.y - b.y)) < 1e-6, changed + ' → ' + edge)
+        }
+      }
+      if (changed === 'innerY' && edge === 'front') assert.ok(Math.abs(reading / 25.4 - 25.5) < 1e-8)
+      if (changed === 'innerY' && edge === 'innerX') assert.ok(Math.abs(reading / 25.4 - 34.5) < 1e-8)
+    }
+  }
 })
 
 test('two independent sink centers retain X-only left/right readings without demanding Y',()=>{
@@ -77,12 +107,12 @@ test('visual dimension arithmetic uses real input, hides zero offsets and never 
   s.dimensions.width=quantity('60');s.dimensions.height=quantity('21')
   s.allowances.right=quantity('1','in','allowance')
   assert.equal(finishedFormula(s,'back','in'),'60 + 1')
-  assert.equal(finishedFormula(s,'right','in'),'21 + 1.5')
+  assert.equal(finishedFormula(s,'right','in'),'21 + 1 1/2')
   assert.equal(finishedFormula(s,'front','in'),null)
   assert.equal(finishedFormula(s,'left','in'),null)
   s.allowances.right=quantity('0','in','allowance')
   assert.equal(finishedFormula(s,'back','in'),null)
   s.dimensions.width=quantity('')
   assert.equal(finishedFormula(s,'back','in'),null)
-  assert.equal(finishedFormula(s,'right','in'),'21 + 1.5')
+  assert.equal(finishedFormula(s,'right','in'),'21 + 1 1/2')
 })

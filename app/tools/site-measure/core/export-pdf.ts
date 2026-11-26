@@ -1,9 +1,8 @@
 import { jsPDF } from 'jspdf'
-import { bounds, calculate, referenceGeometry, type Point, type Snapshot } from './geometry'
-import { edgeOrder, treatmentOf, value } from './model'
-import { formatLength } from './units'
+import { bounds, type Point, type Snapshot } from './geometry'
+import { edgeOrder, treatmentOf } from './model'
+import { drawPartSheets } from './part-sheets'
 import { adoptSharedCanvas, projectCanvasItems } from './project-canvas'
-import { finishedEdgeReading } from './worksheet'
 import { canvasNoteLines, noteCardHeight, NOTE_WIDTH } from './canvas-notes'
 
 export async function loadPdfFont(): Promise<Uint8Array> {
@@ -19,7 +18,6 @@ function binary(bytes: Uint8Array): string {
 
 type Rgb = [number, number, number]
 const green: Rgb = [38, 91, 78]
-const red: Rgb = [172, 65, 52]
 const orange: Rgb = [172, 94, 35]
 const textColor: Rgb = [34, 49, 44]
 const white: Rgb = [255, 255, 255]
@@ -44,7 +42,8 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
   const parts = projectCanvasItems(drawingProject.areas)
   const notes = project.canvasNotes ?? []
   const walls = project.wallSketches ?? []
-  const strings = [project.name, ...parts.flatMap(p => [p.areaName, p.shape.name]), ...notes.map(n => n.text), ...walls.map(w => w.name)]
+  const strings = [project.name, ...parts.flatMap(p => [p.areaName, p.shape.name, p.shape.notes,
+    ...p.shape.fieldRecords.map(r=>r.kind==='note'?r.text:r.label)]), ...notes.map(n => n.text), ...walls.map(w => w.name)]
   const cmap = (pdf.getFont().metadata as { cmap?: { unicode?: { codeMap?: Record<number, number> } } }).cmap?.unicode?.codeMap
   if (cmap) {
     const missing = [...new Set(Array.from(strings.join('')).filter(c => c.trim() && !cmap[c.codePointAt(0)!]))]
@@ -92,15 +91,6 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
     pdf.setFontSize(size)
     pdf.text(s, x, y, { align })
   }
-  const tag = (label: string, world: Point, size = 9, color: Rgb = textColor) => {
-    const p = px(world)
-    pdf.setFontSize(size)
-    const width = Math.min(58, pdf.getTextWidth(label) + 2.8)
-    pdf.setFillColor(...white)
-    pdf.roundedRect(p.x - width / 2, p.y - 3.6, width, 5.6, 1, 1, 'F')
-    words(label, p.x, p.y, size, 'center', color)
-  }
-
   // Small header and footer only: no multi-page text report, no per-edge data table.
   words(project.name.length > 65 ? project.name.slice(0, 64) + '…' : project.name, left, 12, 14)
   words(project.unit === 'in' ? 'inch' : 'mm', pageWidth - right, 12, 9, 'right')
@@ -139,69 +129,9 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
   }
   pdf.setLineDashPattern([], 0)
 
-  // Pass 3: finished measurements directly on the drawing, including incomplete '?'.
   for (const part of parts) {
-    const { shape } = part
-    words((part.areaName ? part.areaName + ' / ' : '') + shape.name,
-      px({ x: part.x, y: part.y - 145 }).x, px({ x: part.x, y: part.y - 145 }).y, 9)
-    const signedArea = part.points.reduce((s, p, i) => {
-      const q = part.points[(i + 1) % part.points.length]
-      return s + p.x * q.y - q.x * p.y
-    }, 0)
-    const sign = signedArea >= 0 ? 1 : -1
-    edgeOrder(shape).forEach((edge, i) => {
-      // Rectangle opposite edges repeat the same finished reading; keep one per axis.
-      if (shape.template === 'rectangle' && (edge === 'front' || edge === 'left')) return
-      const a = part.points[i], b = part.points[(i + 1) % part.points.length]
-      if (!a || !b) return
-      const dx = b.x - a.x, dy = b.y - a.y, size = Math.hypot(dx, dy)
-      if (size < 1) return
-      const normal = { x: sign * dy / size, y: -sign * dx / size }
-      const mid = { x: part.x + (a.x + b.x) / 2, y: part.y + (a.y + b.y) / 2 }
-      const label = { x: mid.x + normal.x * 45, y: mid.y + normal.y * 45 }
-      const n = finishedEdgeReading(shape, edge)
-      const text = n === null ? '?' : formatLength(n, project.unit)
-      const edgeA = { x: part.x + a.x, y: part.y + a.y }
-      const edgeB = { x: part.x + b.x, y: part.y + b.y }
-      setStroke([128, 146, 136], 0.18)
-      line(edgeA, { x: edgeA.x + normal.x * 27, y: edgeA.y + normal.y * 27 })
-      line(edgeB, { x: edgeB.x + normal.x * 27, y: edgeB.y + normal.y * 27 })
-      const labelPoint = px(label)
-      tag(text, label, 9, n === null ? red : green)
-      if (size * scale < 22) {
-        setStroke([128, 146, 136], 0.18)
-        const m = px(mid)
-        pdf.line(m.x, m.y, labelPoint.x, labelPoint.y)
-      }
-    })
-    const geometry = calculate(shape)
-    let sinkCount = 0
-    for (const ref of shape.references) {
-      if (ref.kind !== 'sink') continue
-      sinkCount++
-      let at: Point | null = null
-      if (geometry.top) {
-        const rg = referenceGeometry(ref, shape, geometry)
-        if (rg.point) at = part.local(rg.point)
-      }
-      if (!at) {
-        const x = value(ref.x)
-        const width = geometry.top ? bounds(geometry.top).width : null
-        const t = x !== null && width && width > 0 ? Math.max(0.08, Math.min(0.92, x / width)) : 0.5
-        at = { x: part.width * (ref.fromX === 'right' ? 1 - t : t), y: part.height * 0.5 }
-      }
-      const spot = px({ x: part.x + at.x, y: part.y + at.y })
-      setStroke([66, 124, 141], 0.25, [1.5, 1])
-      pdf.circle(spot.x, spot.y, 1.65, 'S')
-      const x = value(ref.x)
-      const label = 'S' + sinkCount + ' ' + (x === null ? '?' : formatLength(x, project.unit))
-      pdf.setFontSize(8.5)
-      const ww = pdf.getTextWidth(label) + 5
-      pdf.setFillColor(...white)
-      pdf.roundedRect(spot.x - ww / 2, spot.y - 10, ww, 6, 1.3, 1.3, 'F')
-      words(label, spot.x, spot.y - 5.7, 8.5, 'center', [51, 101, 125])
-    }
-    pdf.setLineDashPattern([], 0)
+    const p = px({ x: part.x, y: part.y - 35 })
+    words(part.shape.name, p.x, p.y, 9)
   }
 
   // Pass 4: visible on-canvas notes, with their original project-level pins.
@@ -233,6 +163,16 @@ export function createPdf(snapshot: Snapshot, fontBytes: Uint8Array): Uint8Array
   setStroke([202, 212, 207], 0.24)
   pdf.line(left, pageHeight - 12, pageWidth - right, pageHeight - 12)
   words(footer, left, pageHeight - 6.5, 7.1, 'left', [92, 105, 98])
-  words('1 / 1', pageWidth - right, pageHeight - 6.5, 7.1, 'right', [92, 105, 98])
+  if (parts.length) {
+    // Keep the shared map when its spatial notes or wall sketches carry information.
+    const overview = notes.length > 0 || walls.length > 0
+    for (const part of parts) drawPartSheets(pdf, project, part)
+    if (!overview) pdf.deletePage(1)
+  }
+  const count = pdf.getNumberOfPages()
+  for (let page = 1; page <= count; page++) {
+    pdf.setPage(page)
+    words(page + ' / ' + count, pdf.internal.pageSize.getWidth() - right, pdf.internal.pageSize.getHeight() - 6.5, 8, 'right')
+  }
   return new Uint8Array(pdf.output('arraybuffer'))
 }

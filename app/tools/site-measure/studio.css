@@ -200,6 +200,17 @@ html[data-theme="dark"] .sm-studio{--sm-danger:#ffb7ae}
 
 /* Quick on-canvas sink reference: X from Left/Right, no required front/back measurement. */
 .sm-sink-editor{min-height:0}
+.sm-canvas-floating:has(.sm-sink-editor){width:min(620px,calc(100% - 16px));max-height:55dvh}
+.sm-sink-bar{display:flex;align-items:end;gap:7px;flex-wrap:wrap}
+.sm-sink-bar label{display:grid;gap:2px;color:var(--sm-muted);font-size:11px}
+.sm-sink-bar input,.sm-sink-bar select,.sm-sink-bar button{min-height:42px;font-size:16px}
+.sm-sink-bar input{width:8em;max-width:28vw}
+.sm-sink-options{display:flex;align-items:center;gap:8px;margin-top:4px}
+.sm-sink-options button{min-height:36px}
+.sm-sink-chain{pointer-events:visiblePainted;cursor:pointer;fill:#205975}
+.sm-sink-chain line,.sm-sink-chain path{stroke:#37718a;stroke-width:1;vector-effect:non-scaling-stroke}
+.sm-sink-chain text{text-anchor:middle;font-size:12px;paint-order:stroke;stroke:var(--sm-paper);stroke-width:3px}
+.sm-sink-chain [data-measured=true] text{font-weight:700}
 .sm-sink-tabs{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 12px}
 .sm-sink-editor .sm-sink-tabs button{min-height:42px;padding:6px 12px;font-size:12px}
 .sm-sink-position{display:grid;grid-template-columns:minmax(92px,1fr) minmax(95px,1.3fr) auto;gap:8px;align-items:end}

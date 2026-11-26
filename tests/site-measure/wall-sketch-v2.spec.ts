@@ -72,5 +72,5 @@ test('P5.2 freehand drag creates multiple world points and cancelled draw saves 
   await expect(page.locator('[data-wall-sketch]')).toHaveCount(1)
   await page.getByRole('button',{name:'Workspace menu'}).click()
   await page.getByRole('button',{name:'PDF / DXF Export'}).click()
-  await expect(page.locator('.sm-export-panel')).toContainText('schematic Wall Sketches')
+  await expect(page.locator('.sm-export-panel')).toContainText('wall sketches')
 })

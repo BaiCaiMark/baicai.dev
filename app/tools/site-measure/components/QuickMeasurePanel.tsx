@@ -78,11 +78,11 @@ export default function QuickMeasurePanel({project,shape,edge,onChange,onEnd,onC
           {(['no-polish','polish','miter'] as Treatment[]).map(t=><button key={t} type="button" aria-pressed={chosen===t} onClick={()=>setEdgeTreatment(t)}>{treatmentName[t]}</button>)}
         </div>
         <div className="sm-quick-section-title"><strong>{edgeLabel[selected]} overhang</strong><span>{allowance.origin==='default'?'Default · check on site':'Custom / measured'}</span></div>
-        <div className="sm-quick-choices" aria-label={edgeLabel[selected]+' overhang'}>
+        {shape.wallAllowances?.[selected]?<p>Wall · 0 overhang</p>:<div className="sm-quick-choices" aria-label={edgeLabel[selected]+' overhang'}>
           {options.map(n=><button key={n} type="button" aria-pressed={value(allowance)===value(quantity(n,project.unit))} onClick={()=>{setCustom(false);setOverhang(n)}}>{n}{project.unit==='in'?'″':' mm'}</button>)}
           <button type="button" aria-pressed={custom} onClick={()=>setCustom(true)}>Custom…</button>
-        </div>
-        {custom?<QuantityField label="Custom overhang" quantity={allowance} unit={project.unit} allowance autoFocus onEnd={onEnd} onChange={q=>onChange(s=>{s.allowances[selected]=q},shape.id+selected)}/>:null}
+        </div>}
+        {custom&&!shape.wallAllowances?.[selected]?<QuantityField label="Custom overhang" quantity={allowance} unit={project.unit} allowance autoFocus onEnd={onEnd} onChange={q=>onChange(s=>{s.allowances[selected]=q},shape.id+selected)}/>:null}
         {chosen==='miter'?<p className="sm-quick-notice">Miter is recorded as a treatment only. Joint type and slab-thickness compensation are not calculated.</p>:null}
         {missing.length?<button className="sm-quick-fill" onClick={()=>{onChange(s=>{for(const e of missing){s.allowances[e]= {...quantity('0',project.unit,'default'),defaultRevision:project.defaults.revision}}});onEnd()}}>Set {missing.map(e=>edgeLabel[e]).join(', ')} unknown overhang to 0</button>:null}
       </section>
