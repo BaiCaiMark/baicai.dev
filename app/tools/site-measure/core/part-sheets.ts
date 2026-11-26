@@ -28,7 +28,7 @@ export function drawPartSheets(pdf: jsPDF, project: Project, part: Part) {
     pdf.setFontSize(9)
     pdf.text((part.guide ? 'INCOMPLETE · ' : '') + 'Field drawing · ' + unit +
       ' · dashed = cabinet · OH = overhang · green = polish · orange = miter', 12, 29)
-    pdf.text('Field measurements · verify on site · not to scale', 12, pdf.internal.pageSize.getHeight()-7)
+    pdf.text(project.name.slice(0,60)+' · field measurements · verify on site · not to scale', 12, pdf.internal.pageSize.getHeight()-7)
   }
   for (let start = 0; start < Math.max(1,sinks.length); start += 3) {
     heading()

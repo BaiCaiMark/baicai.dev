@@ -26,12 +26,19 @@ export default function MeasureCanvas({ allowanceHighlight, area, areas, wallSke
   const [manual,setManual]=useState<Bounds|null>(null),[ratio,setRatio]=useState(1.8)
   const [canvasSize,setCanvasSize]=useState({width:1000,height:600})
   const manualView=useRef(false)
+  const resumeAutoFit=useRef(false)
   const [drag,setDrag]=useState<{id:string;position:Point}|null>(null)
   const [noteDrag,setNoteDrag]=useState<{id:string;position:Point}|null>(null)
   const liveNoteDrag=useRef<{id:string;position:Point}|null>(null)
   const [editorAnchor,setEditorAnchor]=useState<Point|null>(null)
   const lastBlankTap = useRef<{time:number;point:Point}|null>(null)
   const layout=useMemo(()=>projectCanvasItems(areas),[areas])
+  useLayoutEffect(()=>{
+    if(!selectedEdge&&resumeAutoFit.current){
+      resumeAutoFit.current=false
+      setManual(null)
+    }
+  },[selectedEdge])
   const labels=useMemo(()=>placeDimensionLabels(layout,!!directMode,unit),[layout,directMode,unit])
   const fitted=useMemo(()=>{
     if(!layout.length&&!canvasNotes.length&&!wallSketches.length)return{x:0,y:0,width:1100,height:650}
@@ -244,6 +251,7 @@ export default function MeasureCanvas({ allowanceHighlight, area, areas, wallSke
     const base=gesture.current,now=center()
     if(start.current&&Math.hypot(e.clientX-start.current.x,e.clientY-start.current.y)>7)moved.current=true
     if(!moved.current)return
+    resumeAutoFit.current=false
     const dx=(now.center.x-base.center.x)*base.scale,dy=(now.center.y-base.center.y)*base.scale
     if(pointers.current.size===1&&start.current?.noteId&&start.current.notePosition&&!notePlacement){
       const next={id:start.current.noteId,position:{x:Math.max(-10000,Math.min(10000,start.current.notePosition.x+dx)),y:Math.max(-10000,Math.min(10000,start.current.notePosition.y+dy))}}
@@ -310,6 +318,7 @@ export default function MeasureCanvas({ allowanceHighlight, area, areas, wallSke
       else if(!moved.current&&start.current?.noteId){onSelectCanvasNote(start.current.noteId)}
       else if(!moved.current&&start.current?.wallId){onSelectWall(start.current.wallId)}
       else if(!moved.current&&start.current?.partId){
+        if(start.current.dimension&&!manualView.current)resumeAutoFit.current=true
         setManual(liveBox.current)
         if(start.current.handle||moving===start.current.partId){/* Move mode owns the whole selected Part, including edges. */}
         else if(start.current.nameTap)onRename?.(start.current.partId)

@@ -29,7 +29,11 @@ export function formatLength(mm: number | null, unit: Unit): string {
   if (unit === 'mm') return numeric(mm, unit) + ' mm'
   const inches = Math.abs(mm / 25.4)
   const ticks = Math.round(inches * 16)
-  if (Math.abs(ticks / 16 - inches) > 1e-10) return numeric(mm, unit) + '″'
+  if (Math.abs(ticks / 16 - inches) > 1e-10) {
+    const decimal=numeric(mm,unit)
+    const rounded=Math.abs(Number(decimal)-mm/25.4)>1e-10
+    return (rounded?'≈':'')+decimal+'″'
+  }
   const whole = Math.floor(ticks / 16)
   let numerator = ticks % 16
   if (!numerator) return (mm < 0 ? '-' : '') + whole + '″'
